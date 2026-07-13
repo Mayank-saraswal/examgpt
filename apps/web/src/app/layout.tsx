@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TRPCReactProvider } from "@/trpc/client";
 import "@examgpt/ui-tokens/css";
@@ -19,19 +20,25 @@ export const metadata: Metadata = {
   description: "AI exam tutor for competitive exams",
 };
 
+const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const body = (
+    <body className="flex min-h-full flex-col">
+      <TRPCReactProvider>{children}</TRPCReactProvider>
+    </body>
+  );
+
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">
-        <TRPCReactProvider>{children}</TRPCReactProvider>
-      </body>
+      {clerkKey ? <ClerkProvider>{body}</ClerkProvider> : body}
     </html>
   );
 }

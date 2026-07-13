@@ -1,142 +1,67 @@
+import { useAuth } from "@clerk/clerk-expo";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  View,
-  useColorScheme,
-} from "react-native";
-import { colors } from "@examgpt/ui-tokens";
+import { Link } from "expo-router";
+import { ActivityIndicator, Text, View } from "react-native";
+import { Button } from "../src/components/ui/button";
 import { trpc } from "../src/trpc";
 
 export default function HomeScreen() {
-  const scheme = useColorScheme();
-  const dark = scheme === "dark";
+  const auth = useAuth();
   const health = useQuery(trpc.health.ping.queryOptions());
+  const me = useQuery({
+    ...trpc.user.me.queryOptions(),
+    enabled: !!auth.isSignedIn,
+  });
 
   return (
-    <View
-      style={[
-        styles.screen,
-        { backgroundColor: dark ? colors.slate[950] : "#ffffff" },
-      ]}
-    >
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: dark ? colors.slate[900] : "#ffffff",
-            borderColor: dark ? colors.slate[800] : colors.slate[200],
-          },
-        ]}
-      >
-        <Text style={[styles.eyebrow, { color: colors.primary[600] }]}>
-          ExamGPT · Phase 0
+    <View className="flex-1 items-center justify-center bg-white px-6 dark:bg-slate-950">
+      <View className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
+        <Text className="text-sm font-medium text-primary-600">ExamGPT</Text>
+        <Text className="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-50">
+          AI exam tutor
         </Text>
-        <Text
-          style={[
-            styles.title,
-            { color: dark ? colors.slate[50] : colors.slate[900] },
-          ]}
-        >
-          Monorepo foundation
-        </Text>
-        <Text style={[styles.subtitle, { color: colors.slate[500] }]}>
-          Mobile client calling health.ping on the Express + tRPC server.
+        <Text className="mt-2 text-sm leading-5 text-slate-500">
+          Mobile client — health check and auth entry.
         </Text>
 
-        <View
-          style={[
-            styles.panel,
-            {
-              backgroundColor: dark ? colors.slate[800] : colors.slate[50],
-              borderColor: dark ? colors.slate[700] : colors.slate[200],
-            },
-          ]}
-        >
-          {health.isLoading ? (
-            <ActivityIndicator color={colors.primary[600]} />
-          ) : health.isError ? (
-            <View>
-              <Text style={[styles.errorTitle, { color: colors.error }]}>
-                API unreachable
-              </Text>
-              <Text style={[styles.meta, { color: colors.slate[500] }]}>
-                {health.error.message}
-              </Text>
-            </View>
+        <View className="mt-6 gap-3">
+          {!auth.isSignedIn ? (
+            <Link href="/sign-in" asChild>
+              <Button title="Sign in" />
+            </Link>
           ) : (
-            <View>
-              <Text style={[styles.okTitle, { color: colors.success }]}>
-                health.ping · ok
+            <>
+              <Text className="text-sm text-slate-700 dark:text-slate-200">
+                Signed in as {me.data?.name ?? me.data?.id ?? "…"}
               </Text>
-              <Text
-                style={[
-                  styles.mono,
-                  { color: dark ? colors.slate[100] : colors.slate[800] },
-                ]}
-              >
+              <Link href="/onboarding" asChild>
+                <Button title="Onboarding" variant="outline" />
+              </Link>
+              <Link href="/notifications-permission" asChild>
+                <Button title="Notification permission" variant="outline" />
+              </Link>
+              <Button title="Sign out" variant="outline" onPress={() => auth.signOut()} />
+            </>
+          )}
+        </View>
+
+        <View className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800">
+          {health.isLoading ? (
+            <ActivityIndicator color="#2563eb" />
+          ) : health.isError ? (
+            <Text className="font-medium text-error">
+              API unreachable: {health.error.message}
+            </Text>
+          ) : (
+            <>
+              <Text className="font-medium text-success">health.ping · ok</Text>
+              <Text className="mt-2 font-mono text-sm text-slate-800 dark:text-slate-100">
                 {health.data?.service}
               </Text>
-              <Text style={[styles.meta, { color: colors.slate[500] }]}>
-                {health.data?.timestamp}
-              </Text>
-            </View>
+            </>
           )}
         </View>
       </View>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 24,
-  },
-  card: {
-    width: "100%",
-    maxWidth: 420,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 24,
-  },
-  eyebrow: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  title: {
-    marginTop: 4,
-    fontSize: 24,
-    fontWeight: "600",
-  },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  panel: {
-    marginTop: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-  },
-  errorTitle: {
-    fontWeight: "600",
-  },
-  okTitle: {
-    fontWeight: "600",
-  },
-  mono: {
-    marginTop: 8,
-    fontFamily: "monospace",
-    fontSize: 14,
-  },
-  meta: {
-    marginTop: 4,
-    fontSize: 12,
-    fontFamily: "monospace",
-  },
-});

@@ -1,0 +1,65 @@
+{
+  "exam": "JEE",
+  "version": "2025-v1",
+  "subjects": [
+    {
+      "name": "Physics",
+      "units": [
+        {
+          "name": "Mechanics",
+          "topics": ["Kinematics", "Laws of Motion", "Work Energy Power", "COM & Collision", "Rotation", "Gravitation"]
+        },
+        {
+          "name": "Waves & Thermodynamics",
+          "topics": ["Simple Harmonic Motion", "Waves", "Heat & Thermodynamics", "Kinetic Theory"]
+        },
+        {
+          "name": "Electromagnetism",
+          "topics": ["Electrostatics", "Capacitance", "Current Electricity", "Magnetism", "EMI", "AC", "EM Waves"]
+        },
+        {
+          "name": "Optics & Modern Physics",
+          "topics": ["Ray Optics", "Wave Optics", "Dual Nature", "Atoms", "Nuclei", "Semiconductors"]
+        }
+      ]
+    },
+    {
+      "name": "Chemistry",
+      "units": [
+        {
+          "name": "Physical",
+          "topics": ["Mole Concept", "Atomic Structure", "Thermodynamics", "Equilibrium", "Electrochemistry", "Chemical Kinetics"]
+        },
+        {
+          "name": "Inorganic",
+          "topics": ["Periodic Properties", "Chemical Bonding", "Coordination Compounds", "p-Block", "d-Block"]
+        },
+        {
+          "name": "Organic",
+          "topics": ["GOC", "Isomerism", "Hydrocarbons", "Halides", "Oxygen Compounds", "Nitrogen Compounds", "Biomolecules"]
+        }
+      ]
+    },
+    {
+      "name": "Mathematics",
+      "units": [
+        {
+          "name": "Algebra",
+          "topics": ["Complex Numbers", "Quadratic Equations", "Sequences & Series", "Binomial", "Matrices & Determinants", "Probability"]
+        },
+        {
+          "name": "Calculus",
+          "topics": ["Functions", "Limits Continuity", "Differentiation", "Integration", "Differential Equations", "Area"]
+        },
+        {
+          "name": "Coordinate Geometry & Vectors",
+          "topics": ["Straight Lines", "Circles", "Conic Sections", "3D Geometry", "Vectors"]
+        },
+        {
+          "name": "Trigonometry",
+          "topics": ["Identities", "Equations", "Inverse Trigonometry"]
+        }
+      ]
+    }
+  ]
+}

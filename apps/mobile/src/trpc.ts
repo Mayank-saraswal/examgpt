@@ -5,10 +5,6 @@ import { createTRPCOptionsProxy } from "@trpc/tanstack-react-query";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
-/**
- * Resolve API base URL for simulators/emulators/devices.
- * Android emulator reaches host machine via 10.0.2.2.
- */
 function getApiUrl() {
   const fromEnv = process.env["EXPO_PUBLIC_API_URL"];
   if (fromEnv) return fromEnv;
@@ -33,13 +29,19 @@ export const queryClient = new QueryClient({
   },
 });
 
+let tokenGetter: (() => Promise<string | null>) | null = null;
+
+export function setAuthTokenGetter(fn: () => Promise<string | null>) {
+  tokenGetter = fn;
+}
+
 const trpcClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
       url: `${getApiUrl()}/trpc`,
-      // Phase 1: attach Clerk token from secure store
-      headers() {
-        return {};
+      async headers() {
+        const token = tokenGetter ? await tokenGetter() : null;
+        return token ? { Authorization: `Bearer ${token}` } : {};
       },
     }),
   ],

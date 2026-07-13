@@ -1,16 +1,46 @@
 import { createContextInner } from "@examgpt/api/context";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
+import { getAuth } from "@clerk/express";
+import { createR2Storage } from "./storage/r2";
+import { inngest } from "./inngest/client";
+import { clerkConfigured, env } from "./env";
+import { logger } from "./logger";
+
+const storage = createR2Storage();
 
 /**
  * Express → tRPC context.
- * Phase 1: verify Clerk JWT from Authorization header into userId.
+ * userId is taken ONLY from verified Clerk session JWT (never client body).
+ * @see https://clerk.com/docs/references/express/overview
  */
 export async function createContext({ req }: CreateExpressContextOptions) {
-  const authHeader = req.headers.authorization;
-  const userId =
-    typeof authHeader === "string" && authHeader.startsWith("Bearer ")
-      ? authHeader.slice("Bearer ".length) || null
-      : null;
+  let userId: string | null = null;
 
-  return createContextInner({ userId });
+  if (clerkConfigured()) {
+    try {
+      const auth = getAuth(req);
+      if (auth.isAuthenticated && auth.userId) {
+        userId = auth.userId;
+      }
+    } catch (err) {
+      logger.warn({ err }, "Clerk getAuth failed");
+    }
+  } else if (env.NODE_ENV === "development") {
+    // Dev-only fallback when Clerk keys are not set: optional Bearer user_<id>
+    const authHeader = req.headers.authorization;
+    if (
+      typeof authHeader === "string" &&
+      authHeader.startsWith("Bearer user_")
+    ) {
+      userId = authHeader.slice("Bearer ".length);
+    }
+  }
+
+  return createContextInner({
+    userId,
+    storage,
+    emitEvent: async (name, data) => {
+      await inngest.send({ name, data });
+    },
+  });
 }

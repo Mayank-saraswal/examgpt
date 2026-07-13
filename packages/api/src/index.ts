@@ -9,3 +9,4 @@ export {
   publicProcedure,
   protectedProcedure,
 } from "./trpc";
+export type { StorageAdapter } from "./routers/documents";

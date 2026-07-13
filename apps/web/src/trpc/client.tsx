@@ -4,6 +4,7 @@ import type { AppRouter } from "@examgpt/api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createTRPCClient, httpBatchLink } from "@trpc/client";
 import { createTRPCContext } from "@trpc/tanstack-react-query";
+import { useAuth } from "@clerk/nextjs";
 import { useState } from "react";
 
 export const { TRPCProvider, useTRPC } = createTRPCContext<AppRouter>();
@@ -36,18 +37,22 @@ function getApiUrl() {
   );
 }
 
-export function TRPCReactProvider(
-  props: Readonly<{ children: React.ReactNode }>,
-) {
+function TrpcInner({
+  children,
+  getToken,
+}: {
+  children: React.ReactNode;
+  getToken: () => Promise<string | null>;
+}) {
   const queryClient = getQueryClient();
   const [trpcClient] = useState(() =>
     createTRPCClient<AppRouter>({
       links: [
         httpBatchLink({
           url: `${getApiUrl()}/trpc`,
-          // Phase 1: attach Clerk session token
-          headers() {
-            return {};
+          async headers() {
+            const token = await getToken();
+            return token ? { Authorization: `Bearer ${token}` } : {};
           },
         }),
       ],
@@ -57,8 +62,31 @@ export function TRPCReactProvider(
   return (
     <QueryClientProvider client={queryClient}>
       <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-        {props.children}
+        {children}
       </TRPCProvider>
     </QueryClientProvider>
   );
+}
+
+function ClerkAuthedProvider({ children }: { children: React.ReactNode }) {
+  const { getToken } = useAuth();
+  return (
+    <TrpcInner getToken={() => getToken()}>{children}</TrpcInner>
+  );
+}
+
+function NoClerkProvider({ children }: { children: React.ReactNode }) {
+  return (
+    <TrpcInner getToken={async () => null}>{children}</TrpcInner>
+  );
+}
+
+export function TRPCReactProvider(
+  props: Readonly<{ children: React.ReactNode }>,
+) {
+  const hasClerk = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  if (hasClerk) {
+    return <ClerkAuthedProvider>{props.children}</ClerkAuthedProvider>;
+  }
+  return <NoClerkProvider>{props.children}</NoClerkProvider>;
 }

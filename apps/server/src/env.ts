@@ -9,9 +9,22 @@ const envSchema = z.object({
   CORS_ORIGINS: z
     .string()
     .default("http://localhost:3000,http://localhost:8081"),
-  // Optional in Phase 0 — required once jobs ship
+
+  // Clerk
+  CLERK_SECRET_KEY: z.string().optional(),
+  CLERK_PUBLISHABLE_KEY: z.string().optional(),
+  CLERK_WEBHOOK_SIGNING_SECRET: z.string().optional(),
+
+  // Inngest
   INNGEST_EVENT_KEY: z.string().optional(),
   INNGEST_SIGNING_KEY: z.string().optional(),
+
+  // R2
+  R2_ACCOUNT_ID: z.string().optional(),
+  R2_ACCESS_KEY_ID: z.string().optional(),
+  R2_SECRET_ACCESS_KEY: z.string().optional(),
+  R2_BUCKET: z.string().optional(),
+  R2_PUBLIC_BASE_URL: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof envSchema>;
@@ -19,7 +32,10 @@ export type ServerEnv = z.infer<typeof envSchema>;
 function loadEnv(): ServerEnv {
   const parsed = envSchema.safeParse(process.env);
   if (!parsed.success) {
-    console.error("Invalid server environment:", parsed.error.flatten().fieldErrors);
+    console.error(
+      "Invalid server environment:",
+      parsed.error.flatten().fieldErrors,
+    );
     throw new Error("Invalid server environment variables");
   }
   return parsed.data;
@@ -31,4 +47,8 @@ export function corsOriginList(): string[] {
   return env.CORS_ORIGINS.split(",")
     .map((o) => o.trim())
     .filter(Boolean);
+}
+
+export function clerkConfigured(): boolean {
+  return Boolean(env.CLERK_SECRET_KEY);
 }

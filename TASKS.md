@@ -309,8 +309,8 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 ### Phase 0 — Monorepo foundation
 - [x] Restructure into Turborepo + bun workspaces; move existing Next.js app to `apps/web` (preserve its Next 16 setup; fix imports). Add `turbo.json` pipelines: `dev`, `build`, `typecheck`, `lint`, `test`.
 - [x] Create `apps/server`: Express + tRPC v11 (`@trpc/server/adapters/express`), CORS locked to app origins, health endpoint, Zod-validated `env.ts`, pino logger, Inngest serve endpoint mounted.
-- [x] Create `apps/mobile`: Expo (SDK 53) + Expo Router + monorepo Metro (`watchFolders`, `nodeModulesPaths`, single-React resolution). UI uses `@examgpt/ui-tokens` via StyleSheet for Phase 0; NativeWind deps present — full className wiring + react-native-reusables component copy deferred to first real screen work (Phase 1). Verified via `expo export --platform web` + typecheck.
-- [x] Create `packages/`: `api`, `db`, `ai`, `validators`, `ui-tokens`, `config` (shared `tsconfig.base.json` with `strict: true`). Shared ESLint flat config still package-local (web uses next eslint); root-level shared eslint package can land with Phase 1 hardening.
+- [x] Create `apps/mobile`: Expo (SDK 53) + Expo Router + monorepo Metro (`watchFolders`, `nodeModulesPaths`, single-React resolution). NativeWind className wiring + reusables-style Button/Input landed in Phase 1.
+- [x] Create `packages/`: `api`, `db`, `ai`, `validators`, `ui-tokens`, `config` (shared `tsconfig.base.json` with `strict: true`). Shared ESLint base at `packages/config/eslint.base.mjs`.
 - [x] `packages/db`: Prisma init, Postgres + Qdrant via `docker-compose.yml` (Postgres host port **5434** to avoid local conflicts). Migration `20260713195928_init` applied.
 - [x] `packages/ui-tokens`: blue primary, slate neutrals, green/red/amber semantic; NO purple; light + dark CSS vars; consumed by web CSS import + mobile StyleSheet.
 - [x] tRPC client wiring: web (`@trpc/tanstack-react-query`) + mobile (vanilla client + queryOptions proxy, auth header stub). Demo `health.ping` on both.
@@ -319,15 +319,16 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
   - Verified: `bun run check` green; server `GET /trpc/health.ping` → ok; web at `:3000` mounts health UI; Expo web export bundles home route with health.ping client; Prisma migrate on docker Postgres. Device/sim visual pass: run `bun run --filter @examgpt/mobile dev` against a running server.
 
 ### Phase 1 — Auth + onboarding
-- [ ] Clerk setup: Google OAuth + phone OTP enabled. Web: `@clerk/nextjs` middleware + sign-in/up pages. Mobile: `@clerk/clerk-expo` with SSO flow + OTP screens.
-- [ ] Server: Clerk JWT verification middleware for Express/tRPC context (`ctx.userId`); `protectedProcedure` base.
-- [ ] Clerk webhook → sync `User` rows (create/update/delete), Svix signature verified.
-- [ ] Onboarding flow (both clients): name, age, exam select (NEET / JEE / Other). Other → custom exam name + syllabus source picker: upload PDF, upload image(s), or paste URL.
-- [ ] R2 presigned upload flow (`documents.presignUpload` → PUT → `registerUpload`), MIME/size validation both ends (max 100MB PDF, 20MB/image).
-- [ ] `syllabus/ingest` Inngest function; NEET/JEE get bundled official syllabus seeds (checked-in JSON topic trees) — no upload needed.
-- [ ] Mobile permissions with graceful denial UX: camera + photo library (ask at first upload, not at launch), notifications (ask after onboarding with a value explainer screen).
-- [ ] Push token registration (`notifications.registerPushToken`) on both platforms.
+- [x] Clerk setup: Google OAuth + phone OTP enabled. Web: `@clerk/nextjs` middleware + sign-in/up pages. Mobile: `@clerk/clerk-expo` with SSO flow + OTP screens.
+- [x] Server: Clerk JWT verification middleware for Express/tRPC context (`ctx.userId`); `protectedProcedure` base.
+- [x] Clerk webhook → sync `User` rows (create/update/delete), Svix signature verified.
+- [x] Onboarding flow (both clients): name, age, exam select (NEET / JEE / Other). Other → custom exam name + syllabus source picker: upload PDF, upload image(s), or paste URL.
+- [x] R2 presigned upload flow (`documents.presignUpload` → PUT → `registerUpload`), MIME/size validation both ends (max 100MB PDF, 20MB/image).
+- [x] `syllabus/ingest` Inngest function; NEET/JEE get bundled official syllabus seeds (checked-in JSON topic trees) — no upload needed.
+- [x] Mobile permissions with graceful denial UX: camera + photo library (ask at first upload, not at launch), notifications (ask after onboarding with a value explainer screen).
+- [x] Push token registration (`notifications.registerPushToken`) on both platforms.
 - **Acceptance:** New user can sign up with Google AND with phone OTP on all three surfaces; complete onboarding with each exam type; syllabus for OTHER ingests to a browsable topic tree; denied permissions don't crash any flow.
+  - Code + `bun run check` green. Live Google/OTP signup requires Clerk dashboard keys + enabled strategies (see `.env.example`). Dev fallback: `Bearer user_<id>` when Clerk keys absent.
 
 ### Phase 2 — Document ingestion + library
 - [ ] Upload UI (both clients): notes/books via file picker, camera (mobile), or URL. Multi-file. Shows per-document progress (`ingestProgress`) with states: uploading → processing (n/m pages) → ready / failed(+reason+retry).

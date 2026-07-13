@@ -1,14 +1,16 @@
 import { appRouter } from "@examgpt/api";
+import { clerkMiddleware } from "@clerk/express";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import cors from "cors";
 import express from "express";
 import { serve } from "inngest/express";
 import { pinoHttp } from "pino-http";
 import { createContext } from "./context";
-import { corsOriginList, env } from "./env";
+import { clerkConfigured, corsOriginList, env } from "./env";
 import { functions } from "./inngest/functions";
 import { inngest } from "./inngest/client";
 import { logger } from "./logger";
+import { clerkWebhookHandler } from "./webhooks/clerk";
 
 const app = express();
 
@@ -23,7 +25,6 @@ app.use(
   cors({
     origin(origin, callback) {
       const allowed = corsOriginList();
-      // Allow non-browser clients (no Origin) and configured app origins
       if (!origin || allowed.includes(origin)) {
         callback(null, true);
         return;
@@ -34,15 +35,31 @@ app.use(
   }),
 );
 
+// Clerk attaches auth to req when configured
+// @see https://clerk.com/docs/references/express/overview
+if (clerkConfigured()) {
+  app.use(clerkMiddleware());
+}
+
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
     service: "examgpt-server",
+    clerk: clerkConfigured(),
     timestamp: new Date().toISOString(),
   });
 });
 
-// Do not mount express.json() globally before tRPC — it can break body parsing.
+// Clerk webhooks need raw body for Svix verification
+app.post(
+  "/webhooks/clerk",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    void clerkWebhookHandler(req, res);
+  },
+);
+
+// Do not mount express.json() globally before tRPC
 app.use(
   "/trpc",
   trpcExpress.createExpressMiddleware({
@@ -54,10 +71,9 @@ app.use(
   }),
 );
 
-// Inngest serve endpoint (dev: `npx inngest-cli@latest dev`)
+// Inngest serve endpoint
 app.use(
   "/api/inngest",
-  // Body parser only for Inngest routes
   express.json(),
   serve({
     client: inngest,
@@ -67,7 +83,11 @@ app.use(
 
 app.listen(env.PORT, () => {
   logger.info(
-    { port: env.PORT, cors: corsOriginList() },
+    {
+      port: env.PORT,
+      cors: corsOriginList(),
+      clerk: clerkConfigured(),
+    },
     "ExamGPT server listening",
   );
 });

@@ -1,0 +1,53 @@
+{
+  "exam": "NEET",
+  "version": "2025-v1",
+  "subjects": [
+    {
+      "name": "Physics",
+      "units": [
+        {
+          "name": "Mechanics",
+          "topics": ["Laws of Motion", "Work Energy Power", "Rotational Motion", "Gravitation"]
+        },
+        {
+          "name": "Electrodynamics",
+          "topics": ["Electrostatics", "Current Electricity", "Magnetic Effects", "EMI & AC"]
+        },
+        {
+          "name": "Optics & Modern Physics",
+          "topics": ["Ray Optics", "Wave Optics", "Dual Nature", "Atoms & Nuclei"]
+        }
+      ]
+    },
+    {
+      "name": "Chemistry",
+      "units": [
+        {
+          "name": "Physical Chemistry",
+          "topics": ["Atomic Structure", "Chemical Bonding", "Thermodynamics", "Equilibrium"]
+        },
+        {
+          "name": "Organic Chemistry",
+          "topics": ["Hydrocarbons", "Haloalkanes", "Alcohols Phenols Ethers", "Biomolecules"]
+        },
+        {
+          "name": "Inorganic Chemistry",
+          "topics": ["Periodic Table", "s-Block", "p-Block", "d- and f-Block", "Coordination Compounds"]
+        }
+      ]
+    },
+    {
+      "name": "Biology",
+      "units": [
+        {
+          "name": "Botany",
+          "topics": ["Plant Kingdom", "Morphology", "Plant Physiology", "Genetics", "Ecology"]
+        },
+        {
+          "name": "Zoology",
+          "topics": ["Animal Kingdom", "Human Physiology", "Reproduction", "Evolution", "Biotechnology"]
+        }
+      ]
+    }
+  ]
+}

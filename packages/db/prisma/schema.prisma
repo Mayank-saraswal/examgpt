@@ -1,4 +1,4 @@
-// Phase 0 foundation schema — expanded in later phases (see TASKS.md §5)
+// ExamGPT Prisma schema — Phase 0/1 foundation (expand in later phases per TASKS.md §5)
 
 generator client {
   provider = "prisma-client-js"
@@ -9,13 +9,92 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ExamType {
+  NEET
+  JEE
+  OTHER
+}
+
+enum DocumentKind {
+  SYLLABUS
+  NOTES
+  BOOK
+  PAPER
+}
+
+enum SourceType {
+  UPLOAD_PDF
+  UPLOAD_IMAGE
+  URL
+}
+
+enum IngestStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
 model User {
-  id        String   @id
-  email     String?  @unique
-  phone     String?  @unique
-  name      String?
-  age       Int?
-  onboarded Boolean  @default(false)
-  createdAt DateTime @default(now())
+  id         String       @id // Clerk userId
+  email      String?      @unique
+  phone      String?      @unique
+  name       String?
+  age        Int?
+  onboarded  Boolean      @default(false)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  exam       ExamProfile?
+  documents  Document[]
+  pushTokens PushToken[]
+}
+
+model ExamProfile {
+  id                 String       @id @default(cuid())
+  userId             String       @unique
+  user               User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type               ExamType
+  customName         String?
+  targetYear         Int?
+  syllabusDocumentId String?
+  syllabusStatus     IngestStatus @default(PENDING)
+  syllabusTopics     Json?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model Document {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind           DocumentKind
+  title          String
+  sourceType     SourceType
+  fileKey        String?
+  sourceUrl      String?
+  mimeType       String?
+  sizeBytes      Int?
+  pageCount      Int?
+  ingestStatus   IngestStatus @default(PENDING)
+  ingestProgress Int          @default(0)
+  failureReason  String?
+  contentHash    String?
+  deletedAt      DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([userId, kind])
+  @@index([contentHash])
+}
+
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String
   updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
