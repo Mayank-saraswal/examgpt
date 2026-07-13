@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ExamGPT
 
-## Getting Started
+AI exam tutor for competitive exams (NEET, JEE, and custom). See [`TASKS.md`](./TASKS.md) for the full plan and [`AGENTS.md`](./AGENTS.md) for engineering rules.
 
-First, run the development server:
+## Monorepo layout
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+apps/
+  web/      Next.js 16 (client)
+  mobile/   Expo + Expo Router (client)
+  server/   Express + tRPC + Inngest
+packages/
+  api/         tRPC routers + procedures
+  db/          Prisma schema + client
+  ai/          model registry
+  validators/  shared Zod schemas
+  ui-tokens/   design tokens (no purple)
+  config/      shared TypeScript config
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Prerequisites
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- [Bun](https://bun.sh) 1.3+
+- Docker (Postgres + Qdrant for local dev)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Quick start
 
-## Learn More
+```bash
+# Install
+bun install
 
-To learn more about Next.js, take a look at the following resources:
+# Infra
+docker compose up -d
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Env (already have .env.example)
+cp .env.example .env   # if needed
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Database
+bun run db:generate
+bun run db:migrate
 
-## Deploy on Vercel
+# Dev (all apps via turbo) — or run filters separately
+bun run --filter @examgpt/server dev
+bun run --filter @examgpt/web dev
+bun run --filter @examgpt/mobile dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Checks
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+bun run check   # typecheck + lint + test
+```
+
+## Phase 0 acceptance
+
+- `bun run check` green
+- Web shows `health.ping` result
+- Expo app shows the same
+- Prisma migrate against docker Postgres
