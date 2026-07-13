@@ -1,0 +1,27 @@
+{
+  "name": "@examgpt/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./context": "./src/context.ts",
+    "./trpc": "./src/trpc.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "echo \"no lint\"",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@examgpt/db": "workspace:*",
+    "@examgpt/validators": "workspace:*",
+    "@trpc/server": "^11.18.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

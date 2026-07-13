@@ -1,0 +1,3 @@
+[install]
+# Hoisted layout avoids Babel/Metro "Cannot find module" resolution issues with Expo
+linker = "hoisted"

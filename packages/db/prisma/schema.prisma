@@ -1,0 +1,21 @@
+// Phase 0 foundation schema — expanded in later phases (see TASKS.md §5)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id
+  email     String?  @unique
+  phone     String?  @unique
+  name      String?
+  age       Int?
+  onboarded Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

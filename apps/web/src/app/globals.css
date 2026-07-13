@@ -1,0 +1,23 @@
+@import "tailwindcss";
+@import "@examgpt/ui-tokens/css";
+
+@theme inline {
+  --color-eg-primary: var(--eg-primary);
+  --color-eg-primary-fg: var(--eg-primary-fg);
+  --color-eg-bg: var(--eg-bg);
+  --color-eg-fg: var(--eg-fg);
+  --color-eg-muted: var(--eg-muted);
+  --color-eg-muted-fg: var(--eg-muted-fg);
+  --color-eg-border: var(--eg-border);
+  --color-eg-success: var(--eg-success);
+  --color-eg-error: var(--eg-error);
+  --color-eg-warning: var(--eg-warning);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--eg-bg);
+  color: var(--eg-fg);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}

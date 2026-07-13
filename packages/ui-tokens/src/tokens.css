@@ -1,0 +1,70 @@
+/**
+ * ExamGPT design tokens
+ * - Primary: blue (#2563eb family)
+ * - Neutrals: slate
+ * - Semantic: green / red / amber
+ * - NO purple / violet / indigo
+ */
+
+:root {
+  /* Primary blue */
+  --eg-primary-50: #eff6ff;
+  --eg-primary-100: #dbeafe;
+  --eg-primary-200: #bfdbfe;
+  --eg-primary-300: #93c5fd;
+  --eg-primary-400: #60a5fa;
+  --eg-primary-500: #3b82f6;
+  --eg-primary-600: #2563eb;
+  --eg-primary-700: #1d4ed8;
+  --eg-primary-800: #1e40af;
+  --eg-primary-900: #1e3a8a;
+
+  /* Slate neutrals */
+  --eg-slate-50: #f8fafc;
+  --eg-slate-100: #f1f5f9;
+  --eg-slate-200: #e2e8f0;
+  --eg-slate-300: #cbd5e1;
+  --eg-slate-400: #94a3b8;
+  --eg-slate-500: #64748b;
+  --eg-slate-600: #475569;
+  --eg-slate-700: #334155;
+  --eg-slate-800: #1e293b;
+  --eg-slate-900: #0f172a;
+  --eg-slate-950: #020617;
+
+  /* Semantic */
+  --eg-success: #16a34a;
+  --eg-success-fg: #ffffff;
+  --eg-error: #dc2626;
+  --eg-error-fg: #ffffff;
+  --eg-warning: #d97706;
+  --eg-warning-fg: #ffffff;
+
+  /* Surfaces (light) */
+  --eg-bg: #ffffff;
+  --eg-fg: var(--eg-slate-900);
+  --eg-muted: var(--eg-slate-100);
+  --eg-muted-fg: var(--eg-slate-500);
+  --eg-border: var(--eg-slate-200);
+  --eg-ring: var(--eg-primary-600);
+  --eg-primary: var(--eg-primary-600);
+  --eg-primary-fg: #ffffff;
+
+  /* Exam palette (NTA-style; amber instead of purple for marked) */
+  --eg-palette-not-visited: var(--eg-slate-400);
+  --eg-palette-not-answered: #dc2626;
+  --eg-palette-answered: #16a34a;
+  --eg-palette-marked: #d97706;
+  --eg-palette-answered-marked: #d97706;
+}
+
+.dark {
+  --eg-bg: var(--eg-slate-950);
+  --eg-fg: var(--eg-slate-50);
+  --eg-muted: var(--eg-slate-900);
+  --eg-muted-fg: var(--eg-slate-400);
+  --eg-border: var(--eg-slate-800);
+  --eg-ring: var(--eg-primary-400);
+  --eg-primary: var(--eg-primary-500);
+  --eg-primary-fg: #ffffff;
+}
