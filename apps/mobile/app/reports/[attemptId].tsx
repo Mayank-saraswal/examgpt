@@ -175,7 +175,9 @@ export default function MobileReportScreen() {
 
         <View className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-700">
           <Text className="mb-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-            Cutoff
+            {(cutoff as { type?: string } | null)?.type === "target_score"
+              ? "Target score"
+              : "Cutoff"}
           </Text>
           <Text className="text-sm text-zinc-600 dark:text-zinc-300">
             {cutoff?.found

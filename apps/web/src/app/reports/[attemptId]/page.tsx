@@ -313,9 +313,13 @@ export default function ReportPage() {
         </section>
       )}
 
-      {/* Cutoff */}
+      {/* Cutoff / target score */}
       <section className="mb-6 rounded-xl border border-[var(--eg-border)] p-5">
-        <h2 className="mb-2 text-lg font-semibold">Cutoff comparison</h2>
+        <h2 className="mb-2 text-lg font-semibold">
+          {(cutoff as { type?: string } | null)?.type === "target_score"
+            ? "Target score"
+            : "Cutoff comparison"}
+        </h2>
         {cutoff?.found ? (
           <>
             <p className="text-sm">{cutoff.verdict ?? "Cutoff data found."}</p>
@@ -339,6 +343,11 @@ export default function ReportPage() {
                   </li>
                 ))}
               </ul>
+            )}
+            {(cutoff as { type?: string }).type === "target_score" && (
+              <p className="mt-1 text-xs text-[var(--eg-muted-fg)]">
+                AI practice papers use a 75% target instead of official cutoffs.
+              </p>
             )}
           </>
         ) : (

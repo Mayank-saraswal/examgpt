@@ -386,12 +386,13 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
   - Unit tests: analysis pure helpers (7) in `packages/ai`. Live full-loop still depends on paper OCR quota + Clerk browser session.
 
 ### Phase 6 — AI paper generation (adaptive)
-- [ ] Config UI: question count, duration, topic multi-select from syllabus tree (or "auto"), difficulty.
-- [ ] `paper/generate` per §6: weak-topic weighting from question_bank + reports (e.g. 50% weak / 30% moderate / 20% strong when "auto"), grounded in the user's notes chunks so questions match what they can actually study, standard marking scheme by exam type.
-- [ ] Dedupe against `question_bank` (embedding similarity > threshold → regenerate).
-- [ ] Quality gate: second model pass validates each question (single unambiguous correct answer, plausible distractors); failures regenerate (max 2 rounds, then drop + log).
-- [ ] Same CBT window + analysis pipeline (cutoff section replaced by target-score comparison).
+- [x] Config UI: question count, duration, topic multi-select from syllabus tree (or "auto"), difficulty. Web `/tests` + mobile tests screen; `tests.generationTopics` + `tests.createGenerated`.
+- [x] `paper/generate` per §6: weak-topic weighting from reports (50% weak / 30% moderate / 20% strong when "auto"), grounded in notes chunks via hybrid retrieval, standard marking scheme by exam type. Inngest `test.generate_requested` → `paper-generate`.
+- [x] Dedupe against `question_bank` Qdrant collection (cosine ≥ 0.88 → drop/regenerate). Upsert after generation.
+- [x] Quality gate: second model pass (`validateGeneratedQuestion`) + deterministic option checks; max 2 regen rounds per topic batch, drop + log failures.
+- [x] Same CBT window + analysis pipeline; AI papers use **target-score (75% of max)** instead of official cutoff in `attempt/analyze` + report UI.
 - **Acceptance:** After a Phase-5 report with weak topics, generate an "auto" paper → weak topics visibly overrepresented; no near-duplicate of a previously seen question; full attempt+report loop works on a generated paper.
+  - Unit tests: topic-plan (4) + paper-generate cosine (2). Live gen needs OpenRouter/OpenAI keys + notes in Qdrant.
 
 ### Phase 7 — Hardening + polish
 - [ ] Rate limits (per-user per-route), request size caps, Helmet, dependency audit.
