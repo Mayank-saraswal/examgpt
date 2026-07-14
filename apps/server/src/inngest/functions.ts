@@ -2,6 +2,8 @@ import { db } from "@examgpt/db";
 import { inngest } from "./client";
 import { documentIngest } from "./document-ingest";
 import { chatMemorySync } from "./memory-sync";
+import { paperExtract } from "./paper-extract";
+import { attemptTimeoutSweep } from "./attempt-sweep";
 
 /**
  * Phase 0 placeholder.
@@ -63,4 +65,6 @@ export const functions = [
   syllabusIngest,
   documentIngest,
   chatMemorySync,
+  paperExtract,
+  attemptTimeoutSweep,
 ];

@@ -40,6 +40,13 @@ function RootStack() {
         <Stack.Screen name="library/[docId]" options={{ title: "Document" }} />
         <Stack.Screen name="chat/index" options={{ title: "Chat" }} />
         <Stack.Screen name="chat/[chatId]" options={{ title: "Tutor" }} />
+        <Stack.Screen name="tests/index" options={{ title: "Tests" }} />
+        <Stack.Screen name="tests/[testId]" options={{ title: "Test" }} />
+        <Stack.Screen
+          name="exam/[attemptId]"
+          options={{ title: "Exam", headerShown: false }}
+        />
+        <Stack.Screen name="exam/done" options={{ title: "Submitted" }} />
       </Stack>
     </>
   );

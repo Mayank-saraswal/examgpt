@@ -94,6 +94,12 @@ export default function DashboardPage() {
                   Chat tutor
                 </Link>
                 <Link
+                  href="/tests"
+                  className={cn(buttonVariants({ variant: "default" }))}
+                >
+                  Tests
+                </Link>
+                <Link
                   href="/library"
                   className={cn(buttonVariants({ variant: "outline" }))}
                 >

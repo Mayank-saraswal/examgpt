@@ -354,19 +354,20 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
   - Code + unit tests (citations + RRF + threshold path) + `bun run check` green. Live acceptance against ingested PDF: start server + ask notes/adversarial/vague questions via web `/chat` or `POST /chat/stream`.
 
 ### Phase 4 — CBT test engine
-- [ ] Test creation UI: "Upload previous year paper" (PDF/images/URL) or "Generate a paper" (Phase 6 backend; build the config UI now behind a flag).
-- [ ] `paper/extract` pipeline per §6 incl. syllabus-match gate: on mismatch → user sees "This paper doesn't look like your syllabus (matched X%). Upload another, or continue anyway?" (`confirmMismatchedPaper`).
-- [ ] Question review screen: after extraction, user can spot-check flagged questions (low-confidence extraction/answers) and report bad ones (marks question `flagged`, excluded from scoring).
-- [ ] "Paper is being prepared — we'll notify you" state + push notification on READY.
-- [ ] **Exam window** (both clients, mobile = landscape-capable, web = full-screen route):
+- [x] Test creation UI: "Upload previous year paper" (PDF/images/URL) or "Generate a paper" (Phase 6 backend; build the config UI now behind a flag).
+- [x] `paper/extract` pipeline per §6 incl. syllabus-match gate: on mismatch → user sees "This paper doesn't look like your syllabus (matched X%). Upload another, or continue anyway?" (`confirmMismatchedPaper`).
+- [x] Question review screen: after extraction, user can spot-check flagged questions (low-confidence extraction/answers) and report bad ones (marks question `flagged`, excluded from scoring).
+- [x] "Paper is being prepared — we'll notify you" state + push notification on READY.
+- [x] **Exam window** (both clients, mobile = landscape-capable, web = full-screen route):
   - Instructions screen replicating standard NTA instructions incl. palette legend, then START TEST.
   - Question area: text + figures, options as radio list. Buttons: `SAVE & NEXT`, `CLEAR`, `SAVE & MARK FOR REVIEW`, `MARK FOR REVIEW & NEXT`, prev/next; section tabs when sections exist.
   - Palette (right panel / drawer on phone): number grid with 5 states — Not Visited (gray outline), Not Answered (red), Answered (green), Marked for Review (**amber** — house rule: no purple), Answered & Marked (amber + green dot). Counts legend. Jump-to-question.
   - Timer: server-authoritative. `attempts.start` returns `endsAt`; client renders countdown from server clock offset; server rejects events/submits after `endsAt` + small grace; client auto-submits at 0; server-side sweep (Inngest cron) force-submits any expired IN_PROGRESS attempts (handles app kill).
   - NTA scoring semantics: "Answered & Marked for Review" COUNTS as answered at submit.
-- [ ] Behavior telemetry: emit AttemptEvents per §5 taxonomy; queue locally (sqlite/localStorage), batch-upload every 10s + on blur/background, idempotent `batchId`; survives refresh/app-kill; `attempts.resume` restores full state (answers, palette, remaining time).
-- [ ] Submit flow: confirm dialog with palette summary → `attempts.submit` (idempotent) → success screen "Submitted. Your result will be announced shortly." → user freed (dashboard).
+- [x] Behavior telemetry: emit AttemptEvents per §5 taxonomy; queue locally (sqlite/localStorage), batch-upload every 10s + on blur/background, idempotent `batchId`; survives refresh/app-kill; `attempts.resume` restores full state (answers, palette, remaining time).
+- [x] Submit flow: confirm dialog with palette summary → `attempts.submit` (idempotent) → success screen "Submitted. Your result will be announced shortly." → user freed (dashboard).
 - **Acceptance:** Upload a real NEET/JEE PYQ PDF → CBT window matches spec; mismatched paper (upload a random PDF) triggers the warning path; kill the app mid-attempt → resume with correct remaining time + palette; let timer expire in background → attempt auto-submitted server-side; double-tap submit → single submission; all five palette states reachable and correctly counted.
+  - Code + unit tests (palette property, scoring, server-time) + `bun run check`. Live PYQ: upload paper doc → createFromPaper → Inngest paper-extract → review/start on web `/exam/{attemptId}` and mobile.
 
 ### Phase 5 — Analysis + report
 - [ ] `attempt/analyze` pipeline per §6. Grading from `markingScheme`; questions with `answerConfidence < 1` get a cross-check pass (re-solve + notes/web verify) before grading.

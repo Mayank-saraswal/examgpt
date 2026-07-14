@@ -39,6 +39,9 @@ export default function HomeScreen() {
               <Link href="/chat" asChild>
                 <Button title="Chat tutor" />
               </Link>
+              <Link href="/tests" asChild>
+                <Button title="Tests" />
+              </Link>
               <Link href="/library" asChild>
                 <Button title="Library" variant="outline" />
               </Link>

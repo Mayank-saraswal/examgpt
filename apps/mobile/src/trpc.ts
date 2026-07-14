@@ -35,7 +35,7 @@ export function setAuthTokenGetter(fn: () => Promise<string | null>) {
   tokenGetter = fn;
 }
 
-const trpcClient = createTRPCClient<AppRouter>({
+export const trpcClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
       url: `${getApiUrl()}/trpc`,
