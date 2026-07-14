@@ -13,6 +13,7 @@ import { inngest } from "./inngest/client";
 import { logger } from "./logger";
 import { clerkWebhookHandler } from "./webhooks/clerk";
 import { ensureStudyChunksCollection } from "./qdrant/client";
+import { ensureQuestionBankCollection } from "./qdrant/question-bank";
 import { chatStreamHandler } from "./routes/chat-stream";
 import { createPrismaUsageSink } from "./ai/usage-sink";
 import { createLocalStorageRouter } from "./storage/local-routes";
@@ -127,6 +128,11 @@ app.listen(env.PORT, () => {
     .then(() => logger.info("Qdrant study_chunks asserted at boot"))
     .catch((err) =>
       logger.error({ err }, "Qdrant boot assert failed — check QDRANT_URL"),
+    );
+  void ensureQuestionBankCollection()
+    .then(() => logger.info("Qdrant question_bank asserted at boot"))
+    .catch((err) =>
+      logger.error({ err }, "Qdrant question_bank boot assert failed"),
     );
 
   // Non-fatal OpenRouter catalog validation → fall back to registry defaults

@@ -310,6 +310,31 @@ export const attemptAnalyze = inngest.createFunction(
     });
 
     const cutoff = await step.run("cutoff-research", async () => {
+      // Phase 6: AI papers use target-score comparison (no official cutoffs)
+      if (attempt.test.source === "AI_GENERATED") {
+        const maxScore = scoredResponses.maxScore;
+        const score = scoredResponses.score;
+        const targetMarks = Math.round(maxScore * 0.75);
+        const delta = score - targetMarks;
+        return {
+          found: true as const,
+          type: "target_score" as const,
+          year: undefined,
+          exam: examProfile?.type ?? "NEET",
+          cutoffs: [
+            {
+              category: "Target (75% of max)",
+              marks: targetMarks,
+            },
+          ],
+          sourceUrls: [] as string[],
+          verdict:
+            delta >= 0
+              ? `Above target by ${delta} marks (target ${targetMarks}/${maxScore})`
+              : `Below target by ${Math.abs(delta)} marks (target ${targetMarks}/${maxScore})`,
+          notFoundReason: undefined,
+        };
+      }
       if (attempt.test.source !== "PYQ_UPLOAD") {
         return {
           found: false as const,

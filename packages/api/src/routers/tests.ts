@@ -1,7 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { NEET_MARKING, JEE_MARKING } from "@examgpt/ai";
+import {
+  NEET_MARKING,
+  JEE_MARKING,
+  flattenSyllabusTopics,
+} from "@examgpt/ai";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { bundledSyllabus } from "../seed";
 
 const markingDefault = (exam?: string) =>
   exam === "JEE" ? JEE_MARKING : NEET_MARKING;
@@ -108,23 +113,73 @@ export const testsRouter = createTRPCRouter({
     }),
 
   /**
-   * AI-generated paper config UI (Phase 6 backend). Flagged behind ready=false.
+   * Topics available for AI paper config (syllabus tree + recent weak topics).
+   */
+  generationTopics: protectedProcedure.query(async ({ ctx }) => {
+    const exam = await ctx.db.examProfile.findUnique({
+      where: { userId: ctx.userId },
+    });
+    let syllabus = flattenSyllabusTopics(exam?.syllabusTopics);
+    if (syllabus.length === 0 && exam?.type) {
+      if (exam.type === "NEET" || exam.type === "JEE") {
+        syllabus = flattenSyllabusTopics(
+          exam.type === "JEE" ? bundledSyllabus.JEE : bundledSyllabus.NEET,
+        );
+      }
+    }
+    const reports = await ctx.db.report.findMany({
+      where: { userId: ctx.userId, status: "READY" },
+      orderBy: { createdAt: "desc" },
+      take: 3,
+      select: { topicAnalysis: true },
+    });
+    const weak: string[] = [];
+    for (const r of reports) {
+      const rows = r.topicAnalysis as { topic: string; verdict: string }[] | null;
+      if (!Array.isArray(rows)) continue;
+      for (const row of rows) {
+        if (row.verdict === "WEAK" && !weak.includes(row.topic)) {
+          weak.push(row.topic);
+        }
+      }
+    }
+    return {
+      examType: exam?.type ?? null,
+      syllabusTopics: syllabus,
+      weakTopics: weak,
+    };
+  }),
+
+  /**
+   * Create AI-generated paper and kick off paper/generate Inngest job.
    */
   createGenerated: protectedProcedure
     .input(
       z.object({
         title: z.string().min(1).max(200),
         durationMin: z.number().int().min(15).max(600).default(180),
-        questionCount: z.number().int().min(5).max(200).default(45),
-        topics: z.array(z.string()).optional(),
-        difficulty: z.enum(["easy", "medium", "hard", "mixed"]).default("mixed"),
+        questionCount: z.number().int().min(5).max(100).default(20),
+        /** Empty / omitted + mode auto → weak-topic weighting */
+        topics: z.array(z.string()).max(40).optional(),
+        difficulty: z
+          .enum(["easy", "medium", "hard", "mixed"])
+          .default("mixed"),
+        mode: z.enum(["auto", "manual"]).default("auto"),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Phase 6 — create placeholder GENERATING test
+      await ctx.db.user.upsert({
+        where: { id: ctx.userId },
+        create: { id: ctx.userId },
+        update: {},
+      });
       const exam = await ctx.db.examProfile.findUnique({
         where: { userId: ctx.userId },
       });
+      const mode =
+        input.mode === "manual" && (input.topics?.length ?? 0) > 0
+          ? "manual"
+          : "auto";
       const test = await ctx.db.test.create({
         data: {
           userId: ctx.userId,
@@ -138,12 +193,20 @@ export const testsRouter = createTRPCRouter({
             questionCount: input.questionCount,
             topics: input.topics ?? [],
             difficulty: input.difficulty,
+            mode,
             phase6: true,
           },
-          failureReason:
-            "AI paper generation ships in Phase 6. Config saved; use PYQ upload for now.",
+          failureReason: null,
         },
       });
+
+      if (ctx.emitEvent) {
+        await ctx.emitEvent("test.generate_requested", {
+          testId: test.id,
+          userId: ctx.userId,
+        });
+      }
+
       return test;
     }),
 

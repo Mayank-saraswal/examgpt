@@ -5,6 +5,7 @@ import { chatMemorySync } from "./memory-sync";
 import { paperExtract } from "./paper-extract";
 import { attemptTimeoutSweep } from "./attempt-sweep";
 import { attemptAnalyze } from "./attempt-analyze";
+import { paperGenerate } from "./paper-generate";
 
 /**
  * Phase 0 placeholder.
@@ -69,4 +70,5 @@ export const functions = [
   paperExtract,
   attemptTimeoutSweep,
   attemptAnalyze,
+  paperGenerate,
 ];

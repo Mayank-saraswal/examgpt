@@ -7,6 +7,7 @@ import { env } from "../env";
 import { logger } from "../logger";
 
 export const STUDY_CHUNKS_COLLECTION = "study_chunks";
+export const QUESTION_BANK_COLLECTION = "question_bank";
 export const DENSE_VECTOR_NAME = "dense";
 export const SPARSE_VECTOR_NAME = "sparse";
 
