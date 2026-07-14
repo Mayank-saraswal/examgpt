@@ -15,6 +15,9 @@ import { clerkWebhookHandler } from "./webhooks/clerk";
 import { ensureStudyChunksCollection } from "./qdrant/client";
 import { chatStreamHandler } from "./routes/chat-stream";
 import { createPrismaUsageSink } from "./ai/usage-sink";
+import { createLocalStorageRouter } from "./storage/local-routes";
+import { shouldMountLocalStorageRoutes } from "./storage/local-routes-policy";
+import { storageBackend } from "./storage";
 
 const app = express();
 
@@ -70,6 +73,32 @@ app.post(
   },
 );
 
+// Dev-only local storage HTTP routes. Unauthenticated PUT accepts up to 110MB —
+// NEVER mount in production (disk-fill DoS). See shouldMountLocalStorageRoutes.
+const mountLocalStorage = shouldMountLocalStorageRoutes(
+  env.NODE_ENV,
+  storageBackend(),
+);
+if (env.NODE_ENV === "production" && mountLocalStorage) {
+  throw new Error(
+    "FATAL: /storage/local routes must not mount when NODE_ENV=production",
+  );
+}
+if (mountLocalStorage) {
+  app.use("/storage/local", createLocalStorageRouter());
+  logger.warn(
+    "Dev local storage routes mounted at /storage/local (NODE_ENV=development, backend=local)",
+  );
+} else {
+  logger.info(
+    {
+      nodeEnv: env.NODE_ENV,
+      storageBackend: storageBackend(),
+    },
+    "/storage/local routes not mounted",
+  );
+}
+
 app.use(
   "/trpc",
   trpcExpress.createExpressMiddleware({
@@ -122,6 +151,8 @@ app.listen(env.PORT, () => {
       cors: corsOriginList(),
       clerk: clerkConfigured(),
       pageQuota: env.INGEST_PAGE_QUOTA,
+      storageBackend: storageBackend(),
+      localStorageRoutes: mountLocalStorage,
     },
     "ExamGPT server listening",
   );

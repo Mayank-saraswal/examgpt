@@ -12,9 +12,9 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { db } from "@examgpt/db";
 
@@ -188,18 +188,39 @@ async function main() {
   });
 
   const fileKey = `users/${USER_ID}/notes/${randomUUID()}.pdf`;
-  // Write to local storage (R2 credentials currently return AccessDenied).
-  // document-ingest downloadDocumentBytes checks .data/uploads first.
-  // Server cwd is apps/server when run via turbo filter → .data/uploads there
-  const localRoot = resolve(
-    process.env.LOCAL_UPLOAD_DIR ??
-      join(import.meta.dir, "../apps/server/.data/uploads"),
-  );
-  console.log(`LOCAL_UPLOAD_DIR=${localRoot}`);
-  const localPath = join(localRoot, fileKey.replace(/\.\./g, ""));
-  await mkdir(dirname(localPath), { recursive: true });
-  await writeFile(localPath, pdfBytes);
-  console.log(`Wrote local PDF ${localPath}`);
+  const useR2 = (process.env.STORAGE_BACKEND ?? "").toLowerCase() === "r2";
+
+  if (useR2) {
+    const accountId = requireEnv("R2_ACCOUNT_ID");
+    const accessKeyId = requireEnv("R2_ACCESS_KEY_ID");
+    const secretAccessKey = requireEnv("R2_SECRET_ACCESS_KEY");
+    const bucket = requireEnv("R2_BUCKET");
+    const client = new S3Client({
+      region: "auto",
+      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+      credentials: { accessKeyId, secretAccessKey },
+    });
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: fileKey,
+        Body: pdfBytes,
+        ContentType: "application/pdf",
+      }),
+    );
+    console.log(`Uploaded PDF to R2 s3://${bucket}/${fileKey}`);
+  } else {
+    // Local fallback: document-ingest downloadDocumentBytes checks .data/uploads first.
+    const localRoot = resolve(
+      process.env.LOCAL_UPLOAD_DIR ??
+        join(import.meta.dir, "../apps/server/.data/uploads"),
+    );
+    console.log(`LOCAL_UPLOAD_DIR=${localRoot}`);
+    const localPath = join(localRoot, fileKey.replace(/\.\./g, ""));
+    await mkdir(dirname(localPath), { recursive: true });
+    await writeFile(localPath, pdfBytes);
+    console.log(`Wrote local PDF ${localPath}`);
+  }
 
   const doc = await db.document.create({
     data: {

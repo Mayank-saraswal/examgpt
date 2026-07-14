@@ -1,11 +1,12 @@
 import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import type { StorageAdapter } from "@examgpt/api";
 import { env } from "../env";
 
 /**
  * Dev/local filesystem storage under LOCAL_UPLOAD_DIR (default: <cwd>/.data/uploads).
- * Used when R2 is missing or returns AccessDenied in development.
+ * Browser uploads use PUT {API_URL}/storage/local/{key} — that HTTP route is
+ * mounted only when NODE_ENV=development AND storageBackend()==="local".
  */
 export function localUploadRoot(): string {
   return resolve(
@@ -13,10 +14,21 @@ export function localUploadRoot(): string {
   );
 }
 
+/** Resolve key under upload root; rejects path traversal. */
 export function localPathForKey(key: string): string {
-  // Prevent path traversal
-  const safe = key.replace(/\.\./g, "").replace(/^\/+/, "");
-  return join(localUploadRoot(), safe);
+  // Strip traversal segments and absolute prefixes before joining
+  const safe = key
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter((p) => p.length > 0 && p !== "." && p !== "..")
+    .join(sep);
+  const root = localUploadRoot();
+  const full = resolve(root, safe);
+  const rootWithSep = root.endsWith(sep) ? root : root + sep;
+  if (full !== root && !full.startsWith(rootWithSep)) {
+    throw new Error("path traversal rejected");
+  }
+  return full;
 }
 
 export async function writeLocalObject(
@@ -37,31 +49,30 @@ export async function readLocalObject(key: string): Promise<Buffer | null> {
   }
 }
 
+function apiBase(): string {
+  return (
+    process.env.API_URL?.replace(/\/$/, "") ??
+    `http://localhost:${env.PORT}`
+  );
+}
+
 export function createLocalStorage(): StorageAdapter {
-  const publicBase = env.R2_PUBLIC_BASE_URL; // unused for local; keep null public URL
   return {
     async presignPut({ key }) {
-      // Client still PUTs — for local we expose a server-side upload shim later.
-      // tRPC clients upload via signed URL; in local mode the "upload URL" is a
-      // data URL scheme that won't work with fetch PUT. Prefer server-side put
-      // via writeLocalObject in scripts / direct ingest. For browser uploads in
-      // pure-local mode, registerUpload can accept bytes later.
-      // Use a special pseudo-URL the mobile/web won't hit; verification scripts
-      // write files directly.
       const path = localPathForKey(key);
       await mkdir(dirname(path), { recursive: true });
-      return {
-        uploadUrl: `local-storage://${key}`,
-        publicUrl: publicBase
-          ? `${publicBase.replace(/\/$/, "")}/${key}`
-          : null,
-      };
+      // Client PUTs body to this server route (dev only)
+      const uploadUrl = `${apiBase()}/storage/local/${key
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}`;
+      return { uploadUrl, publicUrl: null };
     },
     async presignGet(key) {
-      // Return a file:// URL for dev inspection (browsers block file:// from web).
-      // Prefer serving via getFileUrl that reads bytes — for now path string.
-      const path = localPathForKey(key);
-      return `file://${path.replace(/\\/g, "/")}`;
+      return `${apiBase()}/storage/local/${key
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/")}`;
     },
     async headObject(key) {
       try {
