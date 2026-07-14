@@ -1,9 +1,30 @@
 export {
   getModelConfig,
   listTasks,
+  listOpenRouterTasks,
+  getDefaultModelId,
+  setRuntimeModelOverride,
+  clearRuntimeModelOverrides,
+  getAllDefaults,
   type AiTask,
   type ModelConfig,
 } from "./registry";
+export {
+  validateOpenRouterModels,
+  type OpenRouterValidateResult,
+} from "./openrouter-validate";
+export {
+  setUsageSink,
+  getUsageSink,
+  getDailyBudgetUsd,
+  estimateCostUsd,
+  assertUnderDailyBudget,
+  logAiUsage,
+  withAiUsage,
+  DailyBudgetExceededError,
+  type AiUsageRecord,
+  type UsageSink,
+} from "./usage";
 export {
   chunkPage,
   chunkPages,
@@ -62,4 +83,5 @@ export {
   memoryFactsToStrings,
   type MemoryFact,
 } from "./memory";
-export { getLanguageModel } from "./providers";
+export { getLanguageModel, getTaskModelId } from "./providers";
+export * from "./exam";

@@ -124,7 +124,7 @@ export async function chatStreamHandler(req: Request, res: Response) {
     // Title after first exchange
     const priorCount = await db.message.count({ where: { chatId } });
     if (priorCount <= 1 || chatTitle === "New chat") {
-      void generateChatTitle(message)
+      void generateChatTitle(message, userId)
         .then(async (title) => {
           await db.chat.update({ where: { id: chatId! }, data: { title } });
           writeSse(res, "title", { title });

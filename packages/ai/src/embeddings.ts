@@ -1,6 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { embed, embedMany } from "ai";
 import { getModelConfig } from "./registry";
+import { withAiUsage } from "./usage";
 
 /** text-embedding-3-large default dimensions */
 export const EMBEDDING_DIMENSIONS = 3072;
@@ -19,7 +20,10 @@ export function getEmbeddingModelId(): string {
   return getModelConfig("embedding").modelId;
 }
 
-export async function embedTexts(texts: string[]): Promise<number[][]> {
+export async function embedTexts(
+  texts: string[],
+  userId?: string | null,
+): Promise<number[][]> {
   if (texts.length === 0) return [];
   const apiKey = requireOpenAiKey();
   const cfg = getModelConfig("embedding");
@@ -29,20 +33,42 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   const openai = createOpenAI({ apiKey });
   const model = openai.embedding(cfg.modelId);
 
-  const { embeddings } = await embedMany({
-    model,
-    values: texts,
+  const result = await withAiUsage({
+    userId,
+    task: "embedding",
+    model: cfg.modelId,
+    run: async () =>
+      embedMany({
+        model,
+        values: texts,
+      }),
+    extractUsage: (r) => ({
+      tokensIn: r.usage?.tokens ?? texts.join(" ").length,
+      tokensOut: 0,
+    }),
   });
-  return embeddings;
+  return result.embeddings;
 }
 
-export async function embedText(text: string): Promise<number[]> {
+export async function embedText(
+  text: string,
+  userId?: string | null,
+): Promise<number[]> {
   const apiKey = requireOpenAiKey();
   const cfg = getModelConfig("embedding");
   const openai = createOpenAI({ apiKey });
   const model = openai.embedding(cfg.modelId);
-  const { embedding } = await embed({ model, value: text });
-  return embedding;
+  const result = await withAiUsage({
+    userId,
+    task: "embedding",
+    model: cfg.modelId,
+    run: async () => embed({ model, value: text }),
+    extractUsage: (r) => ({
+      tokensIn: r.usage?.tokens ?? text.length,
+      tokensOut: 0,
+    }),
+  });
+  return result.embedding;
 }
 
 /**

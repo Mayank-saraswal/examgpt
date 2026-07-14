@@ -33,9 +33,16 @@ const envSchema = z.object({
   // AI
   OPENAI_API_KEY: z.string().optional(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  /** Per-user daily AI spend cap in USD (default 5). */
+  AI_DAILY_BUDGET_USD: z.coerce.number().positive().default(5),
 
-  // Ingest guards
+  // Ingest / exam guards
   INGEST_PAGE_QUOTA: z.coerce.number().int().positive().default(2000),
+  /** Seconds after endsAt still accepting late events (default 5). */
+  ATTEMPT_GRACE_SEC: z.coerce.number().int().nonnegative().default(5),
+  /** Syllabus match score 0–1 below which paper needs review (default 0.35). */
+  PAPER_SYLLABUS_MATCH_THRESHOLD: z.coerce.number().min(0).max(1).default(0.35),
 });
 
 export type ServerEnv = z.infer<typeof envSchema>;

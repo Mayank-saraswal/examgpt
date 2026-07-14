@@ -40,3 +40,8 @@ export function getLanguageModel(task: AiTask): LanguageModel {
 
   throw new Error(`Unsupported provider for task ${task}`);
 }
+
+/** Model id string for logging (after overrides). */
+export function getTaskModelId(task: AiTask): string {
+  return getModelConfig(task).modelId;
+}

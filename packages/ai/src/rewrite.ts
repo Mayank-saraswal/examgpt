@@ -1,7 +1,7 @@
 import { generateText } from "ai";
 import { z } from "zod";
-import { getLanguageModel } from "./providers";
-import { getModelConfig } from "./registry";
+import { getLanguageModel, getTaskModelId } from "./providers";
+import { withAiUsage } from "./usage";
 
 export const rewriteResultSchema = z.object({
   rewritten: z.string(),
@@ -15,7 +15,10 @@ export type RewriteResult = z.infer<typeof rewriteResultSchema>;
  * Query rewrite + HyDE-style hypothetical passage for better retrieval.
  * Falls back to the original query if the model fails.
  */
-export async function rewriteQuery(query: string): Promise<RewriteResult> {
+export async function rewriteQuery(
+  query: string,
+  userId?: string | null,
+): Promise<RewriteResult> {
   const trimmed = query.trim();
   if (trimmed.length < 2) {
     return {
@@ -25,7 +28,6 @@ export async function rewriteQuery(query: string): Promise<RewriteResult> {
     };
   }
 
-  // Heuristic vague short queries without model
   const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
   const looksVague =
     wordCount <= 4 ||
@@ -34,11 +36,17 @@ export async function rewriteQuery(query: string): Promise<RewriteResult> {
     );
 
   try {
-    const model = getLanguageModel("chat-rag");
-    const { text } = await generateText({
-      model,
-      temperature: 0,
-      prompt: `You help retrieval for an exam tutor (NEET/JEE).
+    const modelId = getTaskModelId("chat-rag");
+    const result = await withAiUsage({
+      userId,
+      task: "chat-rag",
+      model: modelId,
+      run: async () => {
+        const model = getLanguageModel("chat-rag");
+        return generateText({
+          model,
+          temperature: 0,
+          prompt: `You help retrieval for an exam tutor (NEET/JEE).
 Given the student query, output JSON only (no markdown):
 {"rewritten":"clear English search query","hydePassage":"2-4 sentence hypothetical answer paragraph rich in exam terms","isVague":true|false}
 
@@ -48,12 +56,13 @@ Rules:
 - isVague=true if the query is ambiguous and needs one clarifying question.
 
 Query: ${JSON.stringify(trimmed)}`,
+        });
+      },
     });
 
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("no json");
-    const parsed = rewriteResultSchema.parse(JSON.parse(jsonMatch[0]));
-    return parsed;
+    return rewriteResultSchema.parse(JSON.parse(jsonMatch[0]));
   } catch {
     return {
       rewritten: trimmed,
@@ -73,6 +82,3 @@ export function isQueryVagueHeuristic(query: string): boolean {
     )
   );
 }
-
-// silence unused import when getModelConfig used only via providers
-void getModelConfig;

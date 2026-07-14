@@ -2,6 +2,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getModelConfig } from "./registry";
+import { withAiUsage } from "./usage";
 
 const pageOcrSchema = z.object({
   classification: z.enum(["printed", "handwritten", "diagram", "mixed"]),
@@ -35,6 +36,7 @@ export async function ocrPage(opts: {
   data: Uint8Array | Buffer;
   mediaType: "application/pdf" | "image/png" | "image/jpeg" | "image/webp";
   pageNumber: number;
+  userId?: string | null;
 }): Promise<PageOcrResult> {
   const apiKey = requireGoogleKey();
   const cfg = getModelConfig("ocr");
@@ -45,17 +47,22 @@ export async function ocrPage(opts: {
   const google = createGoogleGenerativeAI({ apiKey });
   const model = google(cfg.modelId);
 
-  const { object } = await generateObject({
-    model,
-    schema: pageOcrSchema,
-    temperature: 0,
-    messages: [
-      {
-        role: "user",
-        content: [
+  const result = await withAiUsage({
+    userId: opts.userId,
+    task: "ocr",
+    model: cfg.modelId,
+    run: async () =>
+      generateObject({
+        model,
+        schema: pageOcrSchema,
+        temperature: 0,
+        messages: [
           {
-            type: "text",
-            text: `You are an exam-notes OCR engine. This is page ${opts.pageNumber} of a study document.
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `You are an exam-notes OCR engine. This is page ${opts.pageNumber} of a study document.
 
 Rules:
 1. Extract ALL readable text into clean markdown.
@@ -65,16 +72,17 @@ Rules:
 4. Classify the page: printed | handwritten | diagram | mixed.
 5. Set hasHandwriting / hasImages / hasTables accurately.
 6. Do not invent content that is not on the page.`,
-          },
-          {
-            type: "file",
-            data: opts.data,
-            mediaType: opts.mediaType,
+              },
+              {
+                type: "file",
+                data: opts.data,
+                mediaType: opts.mediaType,
+              },
+            ],
           },
         ],
-      },
-    ],
+      }),
   });
 
-  return object;
+  return result.object;
 }

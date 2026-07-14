@@ -54,6 +54,7 @@ export async function runRagPipeline(
       query: opts.query,
       onToken: opts.onToken,
       signal: opts.signal,
+      userId: opts.userId,
     });
     return {
       ...web,
@@ -66,7 +67,7 @@ export async function runRagPipeline(
     };
   }
 
-  const rewrite = await rewriteQuery(opts.query);
+  const rewrite = await rewriteQuery(opts.query, opts.userId);
   const chunks = await opts.search({
     userId: opts.userId,
     query: rewrite.rewritten,
@@ -85,7 +86,7 @@ export async function runRagPipeline(
 
   if (chunks.length === 0 || bestScore < threshold) {
     if (isVague) {
-      const q = await generateClarifyingQuestion(opts.query);
+      const q = await generateClarifyingQuestion(opts.query, opts.userId);
       return {
         kind: "clarifying",
         content: q,
@@ -107,6 +108,7 @@ export async function runRagPipeline(
     memoryFacts,
     onToken: opts.onToken,
     signal: opts.signal,
+    userId: opts.userId,
   });
 
   return { ...answer, meta };

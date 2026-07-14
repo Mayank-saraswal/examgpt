@@ -1,4 +1,5 @@
 import { appRouter } from "@examgpt/api";
+import { setUsageSink, validateOpenRouterModels } from "@examgpt/ai";
 import { clerkMiddleware } from "@clerk/express";
 import * as trpcExpress from "@trpc/server/adapters/express";
 import cors from "cors";
@@ -13,6 +14,7 @@ import { logger } from "./logger";
 import { clerkWebhookHandler } from "./webhooks/clerk";
 import { ensureStudyChunksCollection } from "./qdrant/client";
 import { chatStreamHandler } from "./routes/chat-stream";
+import { createPrismaUsageSink } from "./ai/usage-sink";
 
 const app = express();
 
@@ -88,12 +90,31 @@ app.use(
   }),
 );
 
+// Wire AiUsageLog sink (per-user daily budget via AI_DAILY_BUDGET_USD)
+setUsageSink(createPrismaUsageSink());
+
 app.listen(env.PORT, () => {
   void ensureStudyChunksCollection()
     .then(() => logger.info("Qdrant study_chunks asserted at boot"))
     .catch((err) =>
       logger.error({ err }, "Qdrant boot assert failed — check QDRANT_URL"),
     );
+
+  // Non-fatal OpenRouter catalog validation → fall back to registry defaults
+  void validateOpenRouterModels({
+    log: (msg, extra) => logger.warn(extra ?? {}, msg),
+  }).then((r) => {
+    if (r.networkError) {
+      logger.warn({ err: r.networkError }, "OpenRouter validation skipped");
+    } else if (r.missing.length) {
+      logger.warn(
+        { missing: r.missing },
+        "OpenRouter models missing — fell back to defaults",
+      );
+    } else {
+      logger.info({ checked: r.checked }, "OpenRouter model IDs validated");
+    }
+  });
 
   logger.info(
     {

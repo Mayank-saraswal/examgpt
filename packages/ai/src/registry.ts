@@ -1,8 +1,8 @@
 /**
- * Model registry (Phase 0 stub).
- * Phase 1+ wires real providers via Vercel AI SDK.
+ * Model registry — single place for task → model mapping.
  * Never hardcode model IDs outside this file.
  */
+
 export type AiTask =
   | "ocr"
   | "vision-extract"
@@ -24,7 +24,6 @@ export type ModelConfig = {
 const defaults: Record<AiTask, ModelConfig> = {
   ocr: {
     task: "ocr",
-    // gemini-2.5-flash returns 404 for new API keys (mid-2026); use 3.5 flash.
     modelId: "gemini-3.5-flash",
     provider: "google",
   },
@@ -40,13 +39,11 @@ const defaults: Record<AiTask, ModelConfig> = {
   },
   "chat-rag": {
     task: "chat-rag",
-    // Verified OpenAI direct id; override with AI_MODEL_CHAT
     modelId: "gpt-4.1",
     provider: "openai",
   },
   "intent-agent": {
     task: "intent-agent",
-    // OpenRouter catalog 2026-07: anthropic/claude-sonnet-4 still listed
     modelId: "anthropic/claude-sonnet-4",
     provider: "openrouter",
   },
@@ -62,7 +59,6 @@ const defaults: Record<AiTask, ModelConfig> = {
   },
   "web-search": {
     task: "web-search",
-    // OpenRouter catalog 2026-07: perplexity/sonar-pro-search (sonar-pro may alias)
     modelId: "perplexity/sonar-pro-search",
     provider: "openrouter",
   },
@@ -85,12 +81,37 @@ const envKey: Record<AiTask, string> = {
   "title-gen": "AI_MODEL_TITLE",
 };
 
+/** Runtime overrides after OpenRouter catalog validation (task → modelId). */
+const runtimeOverrides = new Map<AiTask, string>();
+
+export function getDefaultModelId(task: AiTask): string {
+  return defaults[task].modelId;
+}
+
 export function getModelConfig(task: AiTask): ModelConfig {
   const base = defaults[task];
-  const override = process.env[envKey[task]];
-  return override ? { ...base, modelId: override } : base;
+  const envOverride = process.env[envKey[task]];
+  const runtime = runtimeOverrides.get(task);
+  const modelId = runtime ?? envOverride ?? base.modelId;
+  return { ...base, modelId };
+}
+
+export function setRuntimeModelOverride(task: AiTask, modelId: string): void {
+  runtimeOverrides.set(task, modelId);
+}
+
+export function clearRuntimeModelOverrides(): void {
+  runtimeOverrides.clear();
 }
 
 export function listTasks(): AiTask[] {
   return Object.keys(defaults) as AiTask[];
+}
+
+export function listOpenRouterTasks(): AiTask[] {
+  return listTasks().filter((t) => defaults[t].provider === "openrouter");
+}
+
+export function getAllDefaults(): Record<AiTask, ModelConfig> {
+  return { ...defaults };
 }
