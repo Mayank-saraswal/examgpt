@@ -9,7 +9,7 @@
 ExamGPT is a personal AI exam tutor for competitive-exam students (NEET, JEE, or any custom exam) on iOS, Android, and web.
 
 Core loops:
-1. **Onboard** — Login (Google / phone OTP via Clerk) → profile (name, age, exam). Exam = NEET | JEE | OTHER. For OTHER, the user supplies a syllabus (PDF / image / URL) which the system parses and attaches to their profile.
+1. **Onboard** — Login (Google OAuth / email OTP+password via Clerk — **no phone/SMS auth**: Clerk SMS doesn't support Indian numbers) → profile (name, age, exam). Exam = NEET | JEE | OTHER. For OTHER, the user supplies a syllabus (PDF / image / URL) which the system parses and attaches to their profile.
 2. **Ingest** — User uploads notes/books (PDFs, images, PDF links). Background pipeline OCRs every page (printed + handwritten + tables + diagrams), chunks with page metadata, embeds, and indexes into Qdrant. User is never blocked.
 3. **Chat** — AI tutor answers questions **from the user's own notes**, with page-level citations that deep-link into the PDF viewer at the exact page. Falls back to clearly-labeled web answers when notes don't cover it. Per-chat history + global memory (mem0: profile, weak topics, past performance).
 4. **Test** — Two sources: (a) upload a previous-year paper (PDF/images/link) → validated against syllabus → questions extracted → real CBT exam window (NTA-style) with server-side timer; (b) AI-generated paper from syllabus + notes with user-chosen topic mix, count, duration — biased toward the user's weak topics.
@@ -319,7 +319,8 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
   - Verified: `bun run check` green; server `GET /trpc/health.ping` → ok; web at `:3000` mounts health UI; Expo web export bundles home route with health.ping client; Prisma migrate on docker Postgres. Device/sim visual pass: run `bun run --filter @examgpt/mobile dev` against a running server.
 
 ### Phase 1 — Auth + onboarding
-- [x] Clerk setup: Google OAuth + phone OTP enabled. Web: `@clerk/nextjs` middleware + sign-in/up pages. Mobile: `@clerk/clerk-expo` with SSO flow + OTP screens.
+- [x] Clerk setup: Google OAuth + email OTP/password. Web: custom `@clerk/nextjs` flows; Mobile: `@clerk/expo` custom flows + `useSSO` Google. *(phone OTP removed — see rework)*
+- [x] **REWORK — auth strategies changed:** Removed ALL phone/SMS auth UI and flows. Replaced with **email OTP + password** sign-in/up on web AND mobile. Google OAuth unchanged via `signIn.sso` / `useSSO`. `User.phone` remains optional profile field only (webhook may still sync if present). Dev: `*+clerk_test@example.com` + OTP `424242`.
 - [x] Server: Clerk JWT verification middleware for Express/tRPC context (`ctx.userId`); `protectedProcedure` base.
 - [x] Clerk webhook → sync `User` rows (create/update/delete), Svix signature verified.
 - [x] Onboarding flow (both clients): name, age, exam select (NEET / JEE / Other). Other → custom exam name + syllabus source picker: upload PDF, upload image(s), or paste URL.
@@ -327,7 +328,7 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - [x] `syllabus/ingest` Inngest function; NEET/JEE get bundled official syllabus seeds (checked-in JSON topic trees) — no upload needed.
 - [x] Mobile permissions with graceful denial UX: camera + photo library (ask at first upload, not at launch), notifications (ask after onboarding with a value explainer screen).
 - [x] Push token registration (`notifications.registerPushToken`) on both platforms.
-- **Acceptance:** New user can sign up with Google AND with phone OTP on all three surfaces; complete onboarding with each exam type; syllabus for OTHER ingests to a browsable topic tree; denied permissions don't crash any flow.
+- **Acceptance:** New user can sign up with Google AND with email OTP/password on all three surfaces (NO phone option visible anywhere); complete onboarding with each exam type; syllabus for OTHER ingests to a browsable topic tree; denied permissions don't crash any flow.
   - Code + `bun run check` green. Live Google/OTP signup requires Clerk dashboard keys + enabled strategies (see `.env.example`). Dev fallback: `Bearer user_<id>` when Clerk keys absent.
 
 ### Phase 2 — Document ingestion + library
@@ -399,7 +400,7 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - [ ] Web: Vercel, env wired, custom domain.
 - [ ] Mobile: EAS build profiles (dev/preview/prod), app icons/splash (no purple), deep-link/universal-link config verified in prod, store listings, TestFlight + Play internal track.
 - [ ] Staging environment + migration flow (`prisma migrate deploy` in CI).
-- **Acceptance:** A fresh phone installs from TestFlight/internal track, signs up with phone OTP, and completes the full loop against production infra.
+- **Acceptance:** A fresh phone installs from TestFlight/internal track, signs up with Google or email OTP, and completes the full loop against production infra.
 
 ---
 
@@ -408,7 +409,7 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 **Uploads/ingestion:** corrupt PDF · password-protected PDF (detect → ask user) · 0-page/blank scan · rotated/skewed scans · >quota pages · duplicate upload (hash) · URL that's HTML not PDF · URL behind auth · OCR fails on one page (mark page FAILED, continue rest, report partial) · non-English notes page (OCR anyway, tag language).
 **Exam:** refresh/app-kill mid-attempt (resume) · clock tampering (server time only) · offline mid-attempt (queue events, warn banner, block final submit until online) · double submit · events arriving after submit (discard, log) · attempt opened on two devices (lock to first; second gets read-only warning) · question with missing figure (render placeholder + flagged) · timer drift (resync server offset every 60s).
 **Chat:** empty knowledge base (nudge to upload notes) · model provider outage (registry fallback chain: direct → OpenRouter equivalent) · streaming dropped mid-answer (client keeps partial + "retry") · mem0 down (skip, log) · citation page beyond pageCount (post-validation strips it — bug alarm).
-**Auth/account:** phone number change in Clerk (webhook sync) · deleted user's background jobs (guard: job checks user exists) · concurrent onboarding double-submit.
+**Auth/account:** email change in Clerk (webhook sync) · deleted user's background jobs (guard: job checks user exists) · concurrent onboarding double-submit.
 **Cost/abuse:** per-user daily AI budget · ingestion quota · rate limits · max chat context length (truncate oldest, keep system + citations).
 
 ---

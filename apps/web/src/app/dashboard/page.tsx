@@ -45,7 +45,7 @@ export default function DashboardPage() {
 
       {isLoaded && !isSignedIn && (
         <p className="text-sm text-[var(--eg-muted-fg)]">
-          Sign in with Google or phone OTP to continue.
+          Sign in with Google or email + password to continue.
         </p>
       )}
 

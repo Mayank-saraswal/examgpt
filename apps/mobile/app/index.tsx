@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "expo-router";
 import { ActivityIndicator, Text, View } from "react-native";
@@ -21,18 +21,20 @@ export default function HomeScreen() {
           AI exam tutor
         </Text>
         <Text className="mt-2 text-sm leading-5 text-slate-500">
-          Mobile client — health check and auth entry.
+          Google or email + password. No phone/SMS auth.
         </Text>
 
         <View className="mt-6 gap-3">
-          {!auth.isSignedIn ? (
+          {!auth.isLoaded ? (
+            <ActivityIndicator color="#2563eb" />
+          ) : !auth.isSignedIn ? (
             <Link href="/sign-in" asChild>
               <Button title="Sign in" />
             </Link>
           ) : (
             <>
               <Text className="text-sm text-slate-700 dark:text-slate-200">
-                Signed in as {me.data?.name ?? me.data?.id ?? "…"}
+                Signed in as {me.data?.name ?? me.data?.email ?? me.data?.id ?? "…"}
               </Text>
               <Link href="/library" asChild>
                 <Button title="Library" />
@@ -43,7 +45,11 @@ export default function HomeScreen() {
               <Link href="/notifications-permission" asChild>
                 <Button title="Notification permission" variant="outline" />
               </Link>
-              <Button title="Sign out" variant="outline" onPress={() => auth.signOut()} />
+              <Button
+                title="Sign out"
+                variant="outline"
+                onPress={() => void auth.signOut()}
+              />
             </>
           )}
         </View>

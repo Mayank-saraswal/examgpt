@@ -15,8 +15,8 @@ export default function Home() {
             AI exam tutor
           </h1>
           <p className="mt-2 text-sm leading-6 text-[var(--eg-muted-fg)]">
-            Sign in with Google or phone OTP, complete onboarding, then study
-            from your notes with page-level citations.
+            Sign in with Google or email + password, complete onboarding, then
+            study from your notes with page-level citations.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">

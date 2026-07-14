@@ -1,5 +1,5 @@
-import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
-import { tokenCache } from "@clerk/clerk-expo/token-cache";
+import { ClerkProvider, useAuth } from "@clerk/expo";
+import { tokenCache } from "@clerk/expo/token-cache";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -44,7 +44,7 @@ function RootStack() {
 }
 
 export default function RootLayout() {
-  const tree = (
+  return (
     <QueryClientProvider client={queryClient}>
       {publishableKey ? (
         <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
@@ -57,5 +57,4 @@ export default function RootLayout() {
       )}
     </QueryClientProvider>
   );
-  return tree;
 }

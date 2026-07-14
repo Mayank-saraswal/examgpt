@@ -9,6 +9,41 @@ Before editing files for a substantial task:
 - Multiple matches: prefer the most specific local skill for the package or concern you are changing; load additional skills only when the task spans multiple packages or concerns.
 <!-- intent-skills:end -->
 
+## Installed skills — MANDATORY usage
+
+This repo has two skill sources. **Consult the matching skill BEFORE writing or modifying code in its area — never code these APIs from memory.**
+
+### 1. Clerk skills — `.agents/skills/` (20 skills)
+
+Official Clerk skills, each a directory with a `SKILL.md` (+ `references/` docs). Read the relevant `SKILL.md` fully before touching auth code:
+
+| When working on | Read first |
+|---|---|
+| Any Clerk work (start here — routing table) | `.agents/skills/clerk/SKILL.md` |
+| Initial setup / env keys | `.agents/skills/clerk-setup/SKILL.md` |
+| Web auth (Next.js middleware, sign-in/up pages) | `.agents/skills/clerk-nextjs-patterns/SKILL.md` |
+| Mobile auth (Expo: Google SSO, email OTP custom flows, tokens) | `.agents/skills/clerk-expo/SKILL.md` + `references/custom-flows.md` |
+| Server-side JWT verification, Backend API calls | `.agents/skills/clerk-backend-api/SKILL.md` |
+| Webhooks (user sync, Svix verification) | `.agents/skills/clerk-webhooks/SKILL.md` |
+| Custom sign-in/up UI (we use custom screens, not hosted) | `.agents/skills/clerk-custom-ui/SKILL.md` |
+| Testing auth flows (test emails, fixed OTP `424242`, Playwright) | `.agents/skills/clerk-testing/SKILL.md` + `clerk-cli/references/recipes.md` |
+
+Notable: dev instances accept test emails (`*+clerk_test@example.com`) verified with fixed OTP `424242` — use these in automated tests instead of real deliveries (see `clerk-cli/references/recipes.md`).
+
+### 2. tRPC skills — via `bunx @tanstack/intent` (21 skills)
+
+`@trpc/server` (16), `@trpc/client` (3), `@trpc/tanstack-react-query` (2). Load before tRPC work, e.g.:
+
+- New routers/procedures → `load @trpc/server#server-setup`, `#middlewares`, `#validators`
+- Auth context / protectedProcedure → `load @trpc/server#auth`
+- Express adapter changes → `load @trpc/server#adapter-express`
+- Error handling → `load @trpc/server#error-handling`
+- Streaming chat (SSE subscriptions) → `load @trpc/server#subscriptions` and `load @trpc/client#links`
+- Client wiring (web) → `load @trpc/tanstack-react-query#react-query-setup`; (mobile/vanilla) → `load @trpc/client#client-setup`
+- Testing procedures directly → `load @trpc/server#server-side-calls`
+
+(`@reduxjs/toolkit` skills are also surfaced by intent — **ignore them**; Redux is banned in this repo per "Do NOT".)
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 
@@ -44,7 +79,7 @@ The complete task list, architecture, schema, and phase plan live in **`TASKS.md
 | Website | Next.js (already in repo — becomes `apps/web`) |
 | Mobile | Expo (React Native), Expo Router, EAS |
 | API server | Express + tRPC v11 (`@trpc/server/adapters/express`) |
-| Auth | Clerk (Google OAuth + phone OTP) — `@clerk/nextjs`, `@clerk/clerk-expo`, `@clerk/express` |
+| Auth | Clerk (Google OAuth + email OTP/password) — `@clerk/nextjs`, `@clerk/clerk-expo`, `@clerk/express`. **NO phone/SMS auth** — Clerk SMS does not support Indian numbers (our primary market). Do not add phone strategies anywhere. |
 | Relational DB | PostgreSQL + Prisma |
 | Vector DB | Qdrant (`@qdrant/js-client-rest`) |
 | Background jobs | Inngest |
