@@ -37,7 +37,7 @@ export const paperExtract = inngest.createFunction(
         where: {
           id: data.testId,
           userId: data.userId,
-          status: { in: ["EXTRACTING", "PENDING"] },
+          status: { in: ["EXTRACTING", "NEEDS_REVIEW"] },
         },
         data: { status: "FAILED", failureReason: msg },
       });

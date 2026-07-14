@@ -28,7 +28,13 @@ export default function ExamDonePage() {
           Score: {state.data.attempt.score}
         </p>
       )}
-      <Link href="/dashboard" className={cn(buttonVariants(), "mt-8")}>
+      <Link
+        href={`/reports/${attemptId}`}
+        className={cn(buttonVariants(), "mt-8")}
+      >
+        View analysis report
+      </Link>
+      <Link href="/dashboard" className={cn(buttonVariants({ variant: "outline" }), "mt-2")}>
         Back to dashboard
       </Link>
       <Link href="/tests" className={cn(buttonVariants({ variant: "outline" }), "mt-2")}>

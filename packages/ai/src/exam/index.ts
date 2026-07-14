@@ -30,3 +30,33 @@ export {
   type ExtractedQuestion,
   type ValidatedQuestion,
 } from "./paper-extract";
+export {
+  formatOptionChangeTrail,
+  classifyQuestionStatus,
+  verdictForTopic,
+  buildTopicAnalysis,
+  buildTimeAnalysis,
+  buildQuestionAnalysisRows,
+  optionTrailFromEvents,
+  rankWeakTopicsForGap,
+  type TopicVerdict,
+  type QuestionAnalysisInput,
+  type TopicAnalysisRow,
+  type TimeAnalysis,
+  type QuestionAnalysisRow,
+} from "./analysis";
+export {
+  generateReportNarrative,
+  reportNarrativeSchema,
+  type ReportNarrative,
+} from "./report-narrative";
+export {
+  researchExamCutoff,
+  cutoffDataSchema,
+  type CutoffData,
+} from "./cutoff";
+export {
+  explainQuestion,
+  crossCheckCorrectKey,
+  type QuestionExplainResult,
+} from "./explain";

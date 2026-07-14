@@ -3,6 +3,15 @@
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useTRPC } from "@/trpc/client";
 import { buttonVariants } from "@/components/ui/button";
 import { HealthStatus } from "@/components/health-status";
@@ -17,6 +26,12 @@ export default function DashboardPage() {
   });
   const status = useQuery({
     ...trpc.onboarding.status.queryOptions(),
+    enabled: isLoaded && !!isSignedIn,
+  });
+  const dashOpts = trpc.reports.dashboard.queryOptions();
+  const dash = useQuery({
+    queryKey: dashOpts.queryKey,
+    queryFn: dashOpts.queryFn,
     enabled: isLoaded && !!isSignedIn,
   });
 
@@ -105,9 +120,87 @@ export default function DashboardPage() {
                 >
                   Library
                 </Link>
+                {dash.data?.latestAttemptId && (
+                  <Link
+                    href={`/reports/${dash.data.latestAttemptId}`}
+                    className={cn(buttonVariants({ variant: "outline" }))}
+                  >
+                    Latest report
+                  </Link>
+                )}
               </div>
             </div>
           )}
+
+          {dash.data && (
+            <section className="rounded-xl border border-[var(--eg-border)] p-5">
+              <h2 className="text-lg font-semibold">Performance</h2>
+              {dash.data.scoreTrend.length === 0 ? (
+                <p className="mt-2 text-sm text-[var(--eg-muted-fg)]">
+                  Complete a mock test to see your score trend and weak topics.
+                </p>
+              ) : (
+                <>
+                  <div className="mt-4 h-48 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={dash.data.scoreTrend}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="var(--eg-border)"
+                        />
+                        <XAxis
+                          dataKey="title"
+                          tick={{ fontSize: 10 }}
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Line
+                          type="monotone"
+                          dataKey="pct"
+                          name="% score"
+                          stroke="#2563eb"
+                          strokeWidth={2}
+                          dot={{ r: 3 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                  {dash.data.weakTopics.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-xs font-medium uppercase tracking-wide text-[var(--eg-muted-fg)]">
+                        Current weak topics
+                      </p>
+                      <ul className="mt-2 flex flex-wrap gap-2">
+                        {dash.data.weakTopics.map((t) => (
+                          <li
+                            key={t}
+                            className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+                          >
+                            {t}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {dash.data.recommendedNext && (
+                    <div className="mt-4 rounded-lg border border-[var(--eg-border)] bg-[var(--eg-muted)]/30 px-3 py-2 text-sm">
+                      <p className="text-xs font-medium uppercase tracking-wide text-[var(--eg-muted-fg)]">
+                        Recommended next
+                      </p>
+                      <p className="mt-1 font-medium">
+                        {dash.data.recommendedNext.topic}
+                      </p>
+                      <p className="text-[var(--eg-muted-fg)]">
+                        {dash.data.recommendedNext.action}
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+
           <HealthStatus />
         </>
       )}

@@ -14,6 +14,12 @@ export default function ExamDoneMobile() {
         Your result will be announced shortly.
         {attemptId ? ` (${attemptId.slice(0, 8)}…)` : ""}
       </Text>
+      {attemptId ? (
+        <Button
+          title="View analysis report"
+          onPress={() => router.replace(`/reports/${attemptId}`)}
+        />
+      ) : null}
       <Button title="Home" onPress={() => router.replace("/")} />
       <Button
         title="Tests"

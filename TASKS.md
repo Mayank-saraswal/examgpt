@@ -373,15 +373,17 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
   - **Live verify (2026-07-14):** Attempt engine PASS (local storage): mixed event stream produced palette states ANSWERED / MARKED / ANSWERED_MARKED / NOT_ANSWERED; option-change trail on Q0; submit scored 7/20; double-submit safe (non-IN_PROGRESS short-circuit). **Blocked this session:** live `paper/extract` OCR failed (`Could not OCR any pages`) due to Gemini free-tier 429 — same quota as Phase 2 re-OCR. Pipeline correctly FAILED (with `onFailure`). Re-run extract on real NEET PDF after quota reset; web `/exam/{attemptId}` still needs a Clerk session for browser UI (server-side attempt logic covered by script).
 
 ### Phase 5 — Analysis + report
-- [ ] `attempt/analyze` pipeline per §6. Grading from `markingScheme`; questions with `answerConfidence < 1` get a cross-check pass (re-solve + notes/web verify) before grading.
-- [ ] Per-question analysis object: correct/wrong/skipped, your answer vs correct, time spent vs test average, visits, option-change trail ("you switched B→C→B — confusion between B and C"), notes citation (doc + page + deep link) or labeled web source, short explanation.
-- [ ] Topic map: per-topic accuracy/time → STRONG / MODERATE / WEAK verdicts.
-- [ ] Cutoff comparison (PYQ only): `web-search` for that paper's year/exam cutoff with source URLs; verdict ("above/below cutoff by N marks") + which weak topics close the gap fastest (highest marks-per-effort).
-- [ ] Report narrative via `report-analysis` model (`generateObject` into `Report` fields — no free-text-only blobs).
-- [ ] Report UI: score card, section/topic charts (recharts web; victory-native or similar on mobile — verify current best; palette tokens, no purple), question-by-question review list with filters (wrong / skipped / slow / confused), each row expandable with explanation + citation link.
-- [ ] mem0 write-back: weak/strong topics, score trend, pacing habits → chat tutor references them ("aapke last test me Thermodynamics weak tha…").
-- [ ] Dashboard: score trend chart across attempts, current weak topics, "recommended next" card.
+- [x] `attempt/analyze` pipeline per §6. Grading from `markingScheme`; questions with `answerConfidence < 1` get a cross-check pass (re-solve + notes/web verify) before grading.
+- [x] Per-question analysis object: correct/wrong/skipped, your answer vs correct, time spent vs test average, visits, option-change trail ("you switched B→C→B — confusion between B and C"), notes citation (doc + page + deep link) or labeled web source, short explanation.
+- [x] Topic map: per-topic accuracy/time → STRONG / MODERATE / WEAK verdicts.
+- [x] Cutoff comparison (PYQ only): `web-search` for that paper's year/exam cutoff with source URLs; verdict ("above/below cutoff by N marks") + which weak topics close the gap fastest (highest marks-per-effort). Explicit `found:false` + reason when sources missing — never invent cutoffs.
+- [x] Report narrative via `report-analysis` model (`generateObject` into `Report` fields — no free-text-only blobs). Deterministic fallback if model fails.
+- [x] Report UI: score card, section/topic charts (recharts web; list-based topic map on mobile), question-by-question review list with filters (wrong / skipped / slow / confused), each row expandable with explanation + citation link. Routes: web `/reports/{attemptId}`, mobile `reports/[attemptId]`.
+- [x] mem0 write-back: weak/strong topics, score trend, pacing habits → chat tutor references them.
+- [x] Dashboard: score trend chart across attempts, current weak topics, "recommended next" card (`reports.dashboard`).
+- [x] tRPC `reports.get` / `listForUser` / `dashboard` / `reanalyze` (idempotent force). Inngest `attempt.submitted` → analyze; READY short-circuits unless `force`.
 - **Acceptance:** Full loop — upload notes → take extracted PYQ → submit → report READY notification → report shows: a wrong answer with correct explanation cited to an actual notes page (link works), a slow-but-correct question flagged with option-change trail, topic verdicts, cutoff verdict with source URL; then ask the chat tutor "what should I study next?" → it references THIS report from mem0.
+  - Unit tests: analysis pure helpers (7) in `packages/ai`. Live full-loop still depends on paper OCR quota + Clerk browser session.
 
 ### Phase 6 — AI paper generation (adaptive)
 - [ ] Config UI: question count, duration, topic multi-select from syllabus tree (or "auto"), difficulty.

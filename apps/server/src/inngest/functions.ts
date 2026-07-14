@@ -4,6 +4,7 @@ import { documentIngest } from "./document-ingest";
 import { chatMemorySync } from "./memory-sync";
 import { paperExtract } from "./paper-extract";
 import { attemptTimeoutSweep } from "./attempt-sweep";
+import { attemptAnalyze } from "./attempt-analyze";
 
 /**
  * Phase 0 placeholder.
@@ -67,4 +68,5 @@ export const functions = [
   chatMemorySync,
   paperExtract,
   attemptTimeoutSweep,
+  attemptAnalyze,
 ];

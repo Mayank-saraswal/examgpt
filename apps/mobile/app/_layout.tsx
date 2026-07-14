@@ -47,6 +47,7 @@ function RootStack() {
           options={{ title: "Exam", headerShown: false }}
         />
         <Stack.Screen name="exam/done" options={{ title: "Submitted" }} />
+        <Stack.Screen name="reports/[attemptId]" options={{ title: "Report" }} />
       </Stack>
     </>
   );
