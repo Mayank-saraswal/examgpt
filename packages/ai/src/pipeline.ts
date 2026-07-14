@@ -19,6 +19,64 @@ export type HybridSearchFn = (opts: {
   topK: number;
 }) => Promise<RetrievedChunk[]>;
 
+const STOP = new Set([
+  "what",
+  "which",
+  "where",
+  "when",
+  "how",
+  "does",
+  "that",
+  "this",
+  "with",
+  "from",
+  "your",
+  "notes",
+  "about",
+  "into",
+  "have",
+  "should",
+  "would",
+  "could",
+  "the",
+  "and",
+  "for",
+  "are",
+  "was",
+  "were",
+  "explain",
+  "detail",
+  "according",
+  "please",
+  "tell",
+  "give",
+]);
+
+/** True if query tokens (len>3, non-stop) appear in top retrieved chunks. */
+export function chunksHaveLexicalSupport(
+  query: string,
+  rewritten: string,
+  chunks: RetrievedChunk[],
+  minHits = 1,
+): boolean {
+  if (chunks.length === 0) return false;
+  const tokens = `${query} ${rewritten}`
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter((t) => t.length > 3 && !STOP.has(t));
+  if (tokens.length === 0) return true; // can't judge — defer to score threshold
+  const corpus = chunks
+    .slice(0, 4)
+    .map((c) => `${c.title} ${c.text}`.toLowerCase())
+    .join("\n");
+  let hits = 0;
+  for (const t of tokens) {
+    if (corpus.includes(t)) hits++;
+  }
+  // Require either 2 hits or ≥30% of content tokens
+  return hits >= Math.max(minHits, Math.ceil(tokens.length * 0.3));
+}
+
 export type RunRagOptions = {
   userId: string;
   query: string;
@@ -84,7 +142,33 @@ export async function runRagPipeline(
     isVague,
   };
 
-  if (chunks.length === 0 || bestScore < threshold) {
+  // Lexical gate: RRF can rank weakly-related chunks highly for off-topic
+  // queries (movies, software, personal data). Require token overlap with
+  // retrieved text so we never invent notes-grounded answers.
+  const hasLexicalSupport = chunksHaveLexicalSupport(
+    opts.query,
+    rewrite.rewritten,
+    chunks,
+  );
+
+  if (
+    chunks.length === 0 ||
+    bestScore < threshold ||
+    !hasLexicalSupport
+  ) {
+    if (isVague && chunks.length > 0 && bestScore < threshold) {
+      const q = await generateClarifyingQuestion(opts.query, opts.userId);
+      return {
+        kind: "clarifying",
+        content: q,
+        citations: [],
+        webSources: [],
+        strippedCitationCount: 0,
+        meta,
+      };
+    }
+    // Off-topic with no lexical support → not_in_notes, unless query is vague
+    // (then ask one clarifying question per product rules).
     if (isVague) {
       const q = await generateClarifyingQuestion(opts.query, opts.userId);
       return {

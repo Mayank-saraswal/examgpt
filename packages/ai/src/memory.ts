@@ -83,15 +83,24 @@ export async function searchMemories(
   const c = getClient();
   if (!c) return [];
   try {
+    // mem0ai v3: top-level userId rejected; use filters.user_id
     const res = await c.search(query, {
-      userId,
       topK: limit,
-      filters: { userId },
+      filters: { user_id: userId },
     });
     return normalizeResults(res);
   } catch (err) {
-    console.warn("[mem0] search failed — degrading silently", err);
-    return [];
+    // Retry legacy shape once for older SDKs
+    try {
+      const res = await c.search(query, {
+        userId,
+        topK: limit,
+      });
+      return normalizeResults(res);
+    } catch (err2) {
+      console.warn("[mem0] search failed — degrading silently", err2);
+      return [];
+    }
   }
 }
 

@@ -38,7 +38,10 @@ export function buildRagSystemPrompt(opts: {
 1. Answer ONLY using the CONTEXT chunks below. Do not use parametric knowledge to fill gaps.
 2. Every factual claim must include a citation marker: [Title, p. N] matching a chunk.
 3. Prefer machine form [citation:DOCUMENT_ID:PAGE] when possible.
-4. If CONTEXT is insufficient for the question, say so clearly — do not invent facts or page numbers.
+4. If CONTEXT is insufficient for the question — or the question is unrelated to the CONTEXT
+   (sports scores, movies, personal data, software how-tos, etc.) — reply with exactly:
+   "मुझे यह आपके notes में नहीं मिला" (or the English line "I could not find this in your notes.")
+   and do not invent an answer or citations.
 5. Never invent document titles or page numbers that are not in CONTEXT.
 6. Do not mix web knowledge into a notes-grounded answer.
 
