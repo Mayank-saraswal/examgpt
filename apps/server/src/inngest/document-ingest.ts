@@ -9,37 +9,53 @@ import { db } from "@examgpt/db";
 import { inngest } from "./client";
 import { splitPdfPages } from "../pdf/split";
 import { fetchRemotePdf } from "../storage/fetch-url";
-import { createR2Storage } from "../storage/r2";
+import {
+  createStorage,
+  readLocalObject,
+  writeLocalObject,
+  storageBackend,
+} from "../storage";
 import { deleteDocumentChunks, upsertStudyChunks } from "../qdrant/points";
 import { ensureStudyChunksCollection } from "../qdrant/client";
 import { logger } from "../logger";
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { env } from "../env";
 
-async function downloadFromR2(fileKey: string): Promise<Buffer> {
+async function downloadDocumentBytes(fileKey: string): Promise<Buffer> {
+  // Local filesystem first (dev fallback / verification scripts)
+  const local = await readLocalObject(fileKey);
+  if (local) return local;
+
   if (
     !env.R2_ACCOUNT_ID ||
     !env.R2_ACCESS_KEY_ID ||
     !env.R2_SECRET_ACCESS_KEY ||
     !env.R2_BUCKET
   ) {
-    throw new Error("R2 is not configured — cannot download document bytes");
+    throw new Error(
+      "Document bytes not found locally and R2 is not configured",
+    );
   }
-  const client = new S3Client({
-    region: "auto",
-    endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: {
-      accessKeyId: env.R2_ACCESS_KEY_ID,
-      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-    },
-  });
-  const res = await client.send(
-    new GetObjectCommand({ Bucket: env.R2_BUCKET, Key: fileKey }),
-  );
-  const body = res.Body;
-  if (!body) throw new Error("Empty R2 object body");
-  const bytes = await body.transformToByteArray();
-  return Buffer.from(bytes);
+  try {
+    const client = new S3Client({
+      region: "auto",
+      endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: env.R2_ACCESS_KEY_ID,
+        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+      },
+    });
+    const res = await client.send(
+      new GetObjectCommand({ Bucket: env.R2_BUCKET, Key: fileKey }),
+    );
+    const body = res.Body;
+    if (!body) throw new Error("Empty R2 object body");
+    const bytes = await body.transformToByteArray();
+    return Buffer.from(bytes);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to download document (${fileKey}): ${msg}`);
+  }
 }
 
 /**
@@ -91,36 +107,42 @@ export const documentIngest = inngest.createFunction(
       try {
         if (doc.sourceType === "URL" && doc.sourceUrl) {
           const fetched = await fetchRemotePdf(doc.sourceUrl);
-          // Persist to R2 if storage available
-          const storage = createR2Storage();
-          if (storage && !doc.fileKey) {
+          // Persist for later viewer access (R2 or local) — best-effort
+          if (!doc.fileKey) {
             const key = `users/${userId}/url/${documentId}.pdf`;
-            // Use put via signed URL path: upload with S3 Put directly
-            if (
-              env.R2_ACCOUNT_ID &&
-              env.R2_ACCESS_KEY_ID &&
-              env.R2_SECRET_ACCESS_KEY &&
-              env.R2_BUCKET
-            ) {
-              const { S3Client, PutObjectCommand } = await import(
-                "@aws-sdk/client-s3"
-              );
-              const client = new S3Client({
-                region: "auto",
-                endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-                credentials: {
-                  accessKeyId: env.R2_ACCESS_KEY_ID,
-                  secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-                },
-              });
-              await client.send(
-                new PutObjectCommand({
-                  Bucket: env.R2_BUCKET,
-                  Key: key,
-                  Body: fetched.bytes,
-                  ContentType: "application/pdf",
-                }),
-              );
+            try {
+              if (storageBackend() === "local" || !env.R2_BUCKET) {
+                await writeLocalObject(key, fetched.bytes);
+              } else if (
+                env.R2_ACCOUNT_ID &&
+                env.R2_ACCESS_KEY_ID &&
+                env.R2_SECRET_ACCESS_KEY &&
+                env.R2_BUCKET
+              ) {
+                const { S3Client, PutObjectCommand } = await import(
+                  "@aws-sdk/client-s3"
+                );
+                const client = new S3Client({
+                  region: "auto",
+                  endpoint: `https://${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+                  credentials: {
+                    accessKeyId: env.R2_ACCESS_KEY_ID,
+                    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+                  },
+                });
+                await client.send(
+                  new PutObjectCommand({
+                    Bucket: env.R2_BUCKET,
+                    Key: key,
+                    Body: fetched.bytes,
+                    ContentType: "application/pdf",
+                  }),
+                );
+              }
+              // Always also keep a local copy in development for resilience
+              if (env.NODE_ENV === "development") {
+                await writeLocalObject(key, fetched.bytes).catch(() => undefined);
+              }
               await db.document.update({
                 where: { id: documentId },
                 data: {
@@ -129,15 +151,36 @@ export const documentIngest = inngest.createFunction(
                   sizeBytes: fetched.sizeBytes,
                 },
               });
+            } catch (persistErr) {
+              logger.warn(
+                { err: persistErr, documentId },
+                "Failed to persist URL PDF to storage — continuing with in-memory bytes",
+              );
+              // Ensure local fallback so retries can re-read
+              try {
+                await writeLocalObject(key, fetched.bytes);
+                await db.document.update({
+                  where: { id: documentId },
+                  data: {
+                    fileKey: key,
+                    mimeType: "application/pdf",
+                    sizeBytes: fetched.sizeBytes,
+                  },
+                });
+              } catch {
+                /* OCR can still proceed from returned bytes */
+              }
             }
           }
+          // Touch storage so backend is resolved
+          createStorage();
           return {
             bytesB64: fetched.bytes.toString("base64"),
             mimeType: "application/pdf" as const,
           };
         }
         if (!doc.fileKey) throw new Error("Document has no fileKey or sourceUrl");
-        const buf = await downloadFromR2(doc.fileKey);
+        const buf = await downloadDocumentBytes(doc.fileKey);
         const mime = (doc.mimeType ?? "application/pdf") as
           | "application/pdf"
           | "image/png"

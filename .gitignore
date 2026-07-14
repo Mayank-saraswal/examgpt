@@ -35,6 +35,10 @@ build
 .env
 .env*.local
 
+# local upload fallback (dev when R2 unavailable)
+.data/
+**/.data/
+
 # debug
 npm-debug.log*
 yarn-debug.log*

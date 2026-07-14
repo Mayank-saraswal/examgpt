@@ -35,6 +35,11 @@ enum IngestStatus {
   FAILED
 }
 
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
 model User {
   id         String       @id // Clerk userId
   email      String?      @unique
@@ -49,6 +54,8 @@ model User {
   exam       ExamProfile?
   documents  Document[]
   pushTokens PushToken[]
+  chats      Chat[]
+  aiUsage    AiUsageLog[]
 }
 
 model ExamProfile {
@@ -121,4 +128,52 @@ model PushToken {
   createdAt DateTime @default(now())
 
   @@index([userId])
+}
+
+model Chat {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String    @default("New chat")
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  messages  Message[]
+
+  @@index([userId, updatedAt])
+}
+
+model Message {
+  id         String      @id @default(cuid())
+  chatId     String
+  chat       Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  /// Client-generated UUID — idempotent local-first sync
+  clientId   String      @unique
+  role       MessageRole
+  content    String
+  /// [{documentId, title, pageNumber, chunkId?, score?}]
+  citations  Json?
+  /// [{url, title}] when web fallback used — never mixed into notes-cited answers
+  webSources Json?
+  /// not_in_notes | clarifying | notes | web
+  kind       String?
+  createdAt  DateTime    @default(now())
+
+  @@index([chatId, createdAt])
+}
+
+model AiUsageLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  task       String
+  model      String
+  tokensIn   Int      @default(0)
+  tokensOut  Int      @default(0)
+  costUsd    Float?
+  latencyMs  Int?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([task, createdAt])
 }

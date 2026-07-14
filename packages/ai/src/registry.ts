@@ -24,12 +24,13 @@ export type ModelConfig = {
 const defaults: Record<AiTask, ModelConfig> = {
   ocr: {
     task: "ocr",
-    modelId: "gemini-2.5-flash",
+    // gemini-2.5-flash returns 404 for new API keys (mid-2026); use 3.5 flash.
+    modelId: "gemini-3.5-flash",
     provider: "google",
   },
   "vision-extract": {
     task: "vision-extract",
-    modelId: "gemini-2.5-pro",
+    modelId: "gemini-3.5-flash",
     provider: "google",
   },
   embedding: {
@@ -39,17 +40,19 @@ const defaults: Record<AiTask, ModelConfig> = {
   },
   "chat-rag": {
     task: "chat-rag",
+    // Verified OpenAI direct id; override with AI_MODEL_CHAT
     modelId: "gpt-4.1",
     provider: "openai",
   },
   "intent-agent": {
     task: "intent-agent",
+    // OpenRouter catalog 2026-07: anthropic/claude-sonnet-4 still listed
     modelId: "anthropic/claude-sonnet-4",
     provider: "openrouter",
   },
   "report-analysis": {
     task: "report-analysis",
-    modelId: "anthropic/claude-opus-4",
+    modelId: "anthropic/claude-sonnet-4",
     provider: "openrouter",
   },
   "paper-generation": {
@@ -59,7 +62,8 @@ const defaults: Record<AiTask, ModelConfig> = {
   },
   "web-search": {
     task: "web-search",
-    modelId: "perplexity/sonar-pro",
+    // OpenRouter catalog 2026-07: perplexity/sonar-pro-search (sonar-pro may alias)
+    modelId: "perplexity/sonar-pro-search",
     provider: "openrouter",
   },
   "title-gen": {

@@ -4,6 +4,7 @@ import { userRouter } from "./routers/user";
 import { onboardingRouter } from "./routers/onboarding";
 import { documentsRouter } from "./routers/documents";
 import { notificationsRouter } from "./routers/notifications";
+import { chatRouter } from "./routers/chat";
 
 export const appRouter = createTRPCRouter({
   health: healthRouter,
@@ -11,6 +12,7 @@ export const appRouter = createTRPCRouter({
   onboarding: onboardingRouter,
   documents: documentsRouter,
   notifications: notificationsRouter,
+  chat: chatRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -333,7 +333,7 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 
 ### Phase 2 — Document ingestion + library
 - [x] Upload UI (both clients): notes/books via file picker, camera (mobile), or URL. Multi-file. Shows per-document progress (`ingestProgress`) with states: uploading → processing (n/m pages) → ready / failed(+reason+retry).
-- [x] `document/ingest` pipeline per §6: page split (server-side `pdf-lib` single-page PDFs), page classification + OCR via `ocr` task (`gemini-2.5-flash` / `@ai-sdk/google`), tables as GFM markdown, figures as `[FIGURE: …]`, chunking + embeddings + Qdrant upsert.
+- [x] `document/ingest` pipeline per §6: page split (server-side `pdf-lib` single-page PDFs), page classification + OCR via `ocr` task (`gemini-3.5-flash` / `@ai-sdk/google`), tables as GFM markdown, figures as `[FIGURE: …]`, chunking + embeddings + Qdrant upsert.
 - [x] Contenthash dedupe: same file re-uploaded → instant READY, no reprocessing.
 - [x] PDF-by-URL: fetch server-side in Inngest (size cap, content-type check, timeout); reject HTML pages with clear error.
 - [x] Library screen: document list, tap → PDF viewer. Web: `react-pdf`/`pdfjs` at `/library/{docId}?page=n`. Mobile: WebView PDF + `examgpt://library/{docId}?page=n` (Expo-friendly).
@@ -342,14 +342,16 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
   - Code + chunker unit tests (8) + `bun run check` green. Live 50+ page OCR needs Inngest dev + keys. Deterministic Qdrant IDs: `sha1(documentId:page:chunkIndex)`.
 
 ### Phase 3 — Chat tutor (RAG)
-- [ ] Chat UI (both clients): chat list, new chat, streaming responses, markdown + LaTeX rendering (exam content has formulas), citation pills under each answer → deep link to page.
-- [ ] RAG pipeline in `packages/ai`: query rewrite/HyDE → hybrid Qdrant search (dense+sparse, RRF) filtered by userId → score threshold → context assembly (with doc title + page per chunk) → `chat-rag` streaming answer with enforced citation format → citation post-validation (every cited page must exist in retrieved set; strip/flag any that don't).
-- [ ] Below-threshold path: "not in your notes" response + one-tap "search the web" → `web-search` model, results visually badged as web-sourced with URLs.
-- [ ] Vague-query path: low retrieval confidence + short/ambiguous query → `intent-agent` asks one clarifying question.
-- [ ] mem0 integration: user profile facts + rolling performance summary injected into system prompt; `chat/memory-sync` writes salient facts async. mem0 outage = degrade silently, never block chat.
-- [ ] Local-first mobile chat: expo-sqlite cache of chats/messages, optimistic send, background sync via `chat.syncMessages` (idempotent by `clientId`); old chats load instantly offline.
-- [ ] Chat titles via `title-gen` after first exchange.
+- [x] Chat UI (both clients): chat list, new chat, streaming responses, markdown + LaTeX rendering (exam content has formulas), citation pills under each answer → deep link to page.
+- [x] RAG pipeline in `packages/ai`: query rewrite/HyDE → hybrid Qdrant search (dense+sparse, RRF) filtered by userId → score threshold → context assembly (with doc title + page per chunk) → `chat-rag` streaming answer with enforced citation format → citation post-validation (every cited page must exist in retrieved set; strip/flag any that don't).
+- [x] Below-threshold path: "not in your notes" response + one-tap "search the web" → `web-search` model (`perplexity/sonar-pro-search` on OpenRouter), results visually badged as web-sourced with URLs.
+- [x] Vague-query path: low retrieval confidence + short/ambiguous query → `intent-agent` asks one clarifying question.
+- [x] mem0 integration: user profile facts + rolling performance summary injected into system prompt; `chat/memory-sync` writes salient facts async. mem0 outage = degrade silently, never block chat.
+- [x] Local-first mobile chat: expo-sqlite cache of chats/messages, optimistic send, background sync via `chat.syncMessages` (idempotent by `clientId`); old chats load instantly offline.
+- [x] Chat titles via `title-gen` after first exchange.
+- **Streaming transport:** Plain Express SSE at `POST /chat/stream` (Clerk JWT in `Authorization`), not tRPC subscriptions. Reason: React Native needs custom auth headers; native EventSource (tRPC `httpSubscriptionLink`) cannot set them without a polyfill. `fetch` streaming works on web + Expo. tRPC still owns chat CRUD (`list/create/get/delete/syncMessages/pullMessages`).
 - **Acceptance:** Ask a question covered in uploaded notes → answer cites correct book + page, link opens that page; ask something NOT in notes → explicit "not in your notes" + labeled web fallback (no invented citation — test 5 adversarial questions); ask a vague question ("explain that force thing") → clarifying question; airplane-mode mobile → old chats readable, queued message sends on reconnect.
+  - Code + unit tests (citations + RRF + threshold path) + `bun run check` green. Live acceptance against ingested PDF: start server + ask notes/adversarial/vague questions via web `/chat` or `POST /chat/stream`.
 
 ### Phase 4 — CBT test engine
 - [ ] Test creation UI: "Upload previous year paper" (PDF/images/URL) or "Generate a paper" (Phase 6 backend; build the config UI now behind a flag).

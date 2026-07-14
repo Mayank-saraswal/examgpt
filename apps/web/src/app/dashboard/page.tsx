@@ -86,6 +86,20 @@ export default function DashboardPage() {
                   Complete onboarding
                 </Link>
               )}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link
+                  href="/chat"
+                  className={cn(buttonVariants({ variant: "default" }))}
+                >
+                  Chat tutor
+                </Link>
+                <Link
+                  href="/library"
+                  className={cn(buttonVariants({ variant: "outline" }))}
+                >
+                  Library
+                </Link>
+              </div>
             </div>
           )}
           <HealthStatus />

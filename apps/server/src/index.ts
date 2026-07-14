@@ -12,6 +12,7 @@ import { inngest } from "./inngest/client";
 import { logger } from "./logger";
 import { clerkWebhookHandler } from "./webhooks/clerk";
 import { ensureStudyChunksCollection } from "./qdrant/client";
+import { chatStreamHandler } from "./routes/chat-stream";
 
 const app = express();
 
@@ -55,6 +56,15 @@ app.post(
   express.raw({ type: "application/json" }),
   (req, res) => {
     void clerkWebhookHandler(req, res);
+  },
+);
+
+// JSON body for chat stream + inngest (tRPC uses its own parser)
+app.post(
+  "/chat/stream",
+  express.json({ limit: "1mb" }),
+  (req, res) => {
+    void chatStreamHandler(req, res);
   },
 );
 

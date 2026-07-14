@@ -1,6 +1,7 @@
 import { db } from "@examgpt/db";
 import { inngest } from "./client";
 import { documentIngest } from "./document-ingest";
+import { chatMemorySync } from "./memory-sync";
 
 /**
  * Phase 0 placeholder.
@@ -57,4 +58,9 @@ export const syllabusIngest = inngest.createFunction(
   },
 );
 
-export const functions = [helloWorld, syllabusIngest, documentIngest];
+export const functions = [
+  helloWorld,
+  syllabusIngest,
+  documentIngest,
+  chatMemorySync,
+];

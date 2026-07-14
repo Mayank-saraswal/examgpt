@@ -1,12 +1,12 @@
 import { createContextInner } from "@examgpt/api/context";
 import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import { getAuth } from "@clerk/express";
-import { createR2Storage } from "./storage/r2";
+import { createStorage } from "./storage";
 import { inngest } from "./inngest/client";
 import { clerkConfigured, env } from "./env";
 import { logger } from "./logger";
 
-const storage = createR2Storage();
+const storage = createStorage();
 
 /**
  * Express → tRPC context.
