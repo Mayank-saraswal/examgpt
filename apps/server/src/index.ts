@@ -11,6 +11,7 @@ import { functions } from "./inngest/functions";
 import { inngest } from "./inngest/client";
 import { logger } from "./logger";
 import { clerkWebhookHandler } from "./webhooks/clerk";
+import { ensureStudyChunksCollection } from "./qdrant/client";
 
 const app = express();
 
@@ -35,8 +36,6 @@ app.use(
   }),
 );
 
-// Clerk attaches auth to req when configured
-// @see https://clerk.com/docs/references/express/overview
 if (clerkConfigured()) {
   app.use(clerkMiddleware());
 }
@@ -46,11 +45,11 @@ app.get("/health", (_req, res) => {
     ok: true,
     service: "examgpt-server",
     clerk: clerkConfigured(),
+    qdrant: env.QDRANT_URL,
     timestamp: new Date().toISOString(),
   });
 });
 
-// Clerk webhooks need raw body for Svix verification
 app.post(
   "/webhooks/clerk",
   express.raw({ type: "application/json" }),
@@ -59,7 +58,6 @@ app.post(
   },
 );
 
-// Do not mount express.json() globally before tRPC
 app.use(
   "/trpc",
   trpcExpress.createExpressMiddleware({
@@ -71,10 +69,9 @@ app.use(
   }),
 );
 
-// Inngest serve endpoint
 app.use(
   "/api/inngest",
-  express.json(),
+  express.json({ limit: "4mb" }),
   serve({
     client: inngest,
     functions,
@@ -82,11 +79,18 @@ app.use(
 );
 
 app.listen(env.PORT, () => {
+  void ensureStudyChunksCollection()
+    .then(() => logger.info("Qdrant study_chunks asserted at boot"))
+    .catch((err) =>
+      logger.error({ err }, "Qdrant boot assert failed — check QDRANT_URL"),
+    );
+
   logger.info(
     {
       port: env.PORT,
       cors: corsOriginList(),
       clerk: clerkConfigured(),
+      pageQuota: env.INGEST_PAGE_QUOTA,
     },
     "ExamGPT server listening",
   );

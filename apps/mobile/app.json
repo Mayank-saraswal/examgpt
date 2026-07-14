@@ -21,7 +21,16 @@
       "bundler": "metro",
       "output": "static"
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow ExamGPT to access photos when you upload notes.",
+          "cameraPermission": "Allow ExamGPT to use the camera when you scan notes."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     }

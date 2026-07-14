@@ -11,6 +11,8 @@ export type CreateInnerContextOptions = {
   storage?: StorageAdapter | null;
   /** Optional event emitter for Inngest (injected by server). */
   emitEvent?: (name: string, data: Record<string, unknown>) => Promise<void>;
+  /** Per-user page quota (INGEST_PAGE_QUOTA). */
+  pageQuota?: number;
 };
 
 export async function createContextInner(opts: CreateInnerContextOptions = {}) {
@@ -19,6 +21,7 @@ export async function createContextInner(opts: CreateInnerContextOptions = {}) {
     userId: opts.userId ?? null,
     storage: opts.storage ?? null,
     emitEvent: opts.emitEvent,
+    pageQuota: opts.pageQuota ?? 2000,
   };
 }
 

@@ -44,6 +44,12 @@ export default function Home() {
           >
             Onboarding
           </Link>
+          <Link
+            href="/library"
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            Library
+          </Link>
         </div>
         <HealthStatus />
       </main>

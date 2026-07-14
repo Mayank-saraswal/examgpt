@@ -25,6 +25,17 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_BUCKET: z.string().optional(),
   R2_PUBLIC_BASE_URL: z.string().optional(),
+
+  // Qdrant
+  QDRANT_URL: z.string().default("http://localhost:6333"),
+  QDRANT_API_KEY: z.string().optional(),
+
+  // AI
+  OPENAI_API_KEY: z.string().optional(),
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
+
+  // Ingest guards
+  INGEST_PAGE_QUOTA: z.coerce.number().int().positive().default(2000),
 });
 
 export type ServerEnv = z.infer<typeof envSchema>;

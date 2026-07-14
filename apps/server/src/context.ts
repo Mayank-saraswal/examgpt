@@ -26,7 +26,6 @@ export async function createContext({ req }: CreateExpressContextOptions) {
       logger.warn({ err }, "Clerk getAuth failed");
     }
   } else if (env.NODE_ENV === "development") {
-    // Dev-only fallback when Clerk keys are not set: optional Bearer user_<id>
     const authHeader = req.headers.authorization;
     if (
       typeof authHeader === "string" &&
@@ -39,6 +38,7 @@ export async function createContext({ req }: CreateExpressContextOptions) {
   return createContextInner({
     userId,
     storage,
+    pageQuota: env.INGEST_PAGE_QUOTA,
     emitEvent: async (name, data) => {
       await inngest.send({ name, data });
     },

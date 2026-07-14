@@ -1,6 +1,7 @@
 import {
   S3Client,
   PutObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -45,11 +46,20 @@ export function createR2Storage(): StorageAdapter | null {
         Key: key,
         ContentType: mimeType,
       });
-      const uploadUrl = await getSignedUrl(client, command, { expiresIn: 60 * 15 });
+      const uploadUrl = await getSignedUrl(client, command, {
+        expiresIn: 60 * 15,
+      });
       const publicUrl = cfg.publicBaseUrl
         ? `${cfg.publicBaseUrl.replace(/\/$/, "")}/${key}`
         : null;
       return { uploadUrl, publicUrl };
+    },
+    async presignGet(key) {
+      const command = new GetObjectCommand({
+        Bucket: cfg.bucket,
+        Key: key,
+      });
+      return getSignedUrl(client, command, { expiresIn: 60 * 30 });
     },
     async headObject(key) {
       try {

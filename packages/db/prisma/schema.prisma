@@ -1,4 +1,4 @@
-// ExamGPT Prisma schema — Phase 0/1 foundation (expand in later phases per TASKS.md §5)
+// ExamGPT Prisma schema — Phase 0–2 (see TASKS.md §5)
 
 generator client {
   provider = "prisma-client-js"
@@ -42,6 +42,8 @@ model User {
   name       String?
   age        Int?
   onboarded  Boolean      @default(false)
+  /// Cumulative pages counted toward INGEST_PAGE_QUOTA
+  pagesUsed  Int          @default(0)
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
   exam       ExamProfile?
@@ -64,9 +66,9 @@ model ExamProfile {
 }
 
 model Document {
-  id             String       @id @default(cuid())
+  id             String         @id @default(cuid())
   userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   kind           DocumentKind
   title          String
   sourceType     SourceType
@@ -75,16 +77,38 @@ model Document {
   mimeType       String?
   sizeBytes      Int?
   pageCount      Int?
-  ingestStatus   IngestStatus @default(PENDING)
-  ingestProgress Int          @default(0)
+  ingestStatus   IngestStatus   @default(PENDING)
+  /// 0–100 overall; pages processed also tracked on DocumentPage
+  ingestProgress Int            @default(0)
   failureReason  String?
   contentHash    String?
   deletedAt      DateTime?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  pages          DocumentPage[]
 
   @@index([userId, kind])
   @@index([contentHash])
+  @@index([userId, ingestStatus])
+}
+
+model DocumentPage {
+  id             String       @id @default(cuid())
+  documentId     String
+  document       Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  pageNumber     Int
+  ocrStatus      IngestStatus @default(PENDING)
+  hasHandwriting Boolean      @default(false)
+  hasImages      Boolean      @default(false)
+  hasTables      Boolean      @default(false)
+  classification String?
+  markdown       String?
+  failureReason  String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([documentId, pageNumber])
+  @@index([documentId, ocrStatus])
 }
 
 model PushToken {

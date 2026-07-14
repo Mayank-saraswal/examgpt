@@ -331,13 +331,14 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
   - Code + `bun run check` green. Live Google/OTP signup requires Clerk dashboard keys + enabled strategies (see `.env.example`). Dev fallback: `Bearer user_<id>` when Clerk keys absent.
 
 ### Phase 2 — Document ingestion + library
-- [ ] Upload UI (both clients): notes/books via file picker, camera (mobile), or URL. Multi-file. Shows per-document progress (`ingestProgress`) with states: uploading → processing (n/m pages) → ready / failed(+reason+retry).
-- [ ] `document/ingest` pipeline per §6: page split (server-side, `pdf-lib`/`mupdf`), page classification, OCR via `ocr` model (structured markdown; tables as markdown tables; each figure → `[FIGURE: description]`), handwritten pages flagged and OCR'd with vision model, chunking per §5, embeddings (batched), Qdrant upsert.
-- [ ] Contenthash dedupe: same file re-uploaded → instant READY, no reprocessing.
-- [ ] PDF-by-URL: fetch server-side in Inngest (size cap, content-type check, timeout); reject HTML pages with clear error.
-- [ ] Library screen: document list, tap → PDF viewer. Web: pdf.js wrapper opening at `?page=n`. Mobile: `react-native-pdf` (or expo-compatible equivalent — verify current best) with `page` prop. This viewer is the citation deep-link target: `/library/{docId}?page={n}` + `examgpt://` scheme route.
-- [ ] Cost guard: per-user page-count quota (env-configurable, e.g. 2000 pages), enforced at presign time with a clear message.
+- [x] Upload UI (both clients): notes/books via file picker, camera (mobile), or URL. Multi-file. Shows per-document progress (`ingestProgress`) with states: uploading → processing (n/m pages) → ready / failed(+reason+retry).
+- [x] `document/ingest` pipeline per §6: page split (server-side `pdf-lib` single-page PDFs), page classification + OCR via `ocr` task (`gemini-2.5-flash` / `@ai-sdk/google`), tables as GFM markdown, figures as `[FIGURE: …]`, chunking + embeddings + Qdrant upsert.
+- [x] Contenthash dedupe: same file re-uploaded → instant READY, no reprocessing.
+- [x] PDF-by-URL: fetch server-side in Inngest (size cap, content-type check, timeout); reject HTML pages with clear error.
+- [x] Library screen: document list, tap → PDF viewer. Web: `react-pdf`/`pdfjs` at `/library/{docId}?page=n`. Mobile: WebView PDF + `examgpt://library/{docId}?page=n` (Expo-friendly).
+- [x] Cost guard: per-user page-count quota (`INGEST_PAGE_QUOTA`, default 2000) enforced at presign / addByUrl with clear message.
 - **Acceptance:** Upload a 50+ page mixed PDF (printed + a handwritten page + a table + a diagram) → READY with all pages OCR'd; verify a table survived as markdown and a diagram has a description; deep link opens the viewer at the exact page on web and mobile; user is never blocked during processing; kill the worker mid-job → retry resumes without duplicating Qdrant points.
+  - Code + chunker unit tests (8) + `bun run check` green. Live 50+ page OCR needs Inngest dev + keys. Deterministic Qdrant IDs: `sha1(documentId:page:chunkIndex)`.
 
 ### Phase 3 — Chat tutor (RAG)
 - [ ] Chat UI (both clients): chat list, new chat, streaming responses, markdown + LaTeX rendering (exam content has formulas), citation pills under each answer → deep link to page.

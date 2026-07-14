@@ -1,23 +1,21 @@
 import { db } from "@examgpt/db";
 import { inngest } from "./client";
+import { documentIngest } from "./document-ingest";
 
 /**
- * Phase 0 placeholder function so the serve endpoint has something registered.
+ * Phase 0 placeholder.
  */
 export const helloWorld = inngest.createFunction(
   { id: "hello-world" },
   { event: "examgpt/hello" },
   async ({ event, step }) => {
-    await step.run("log", async () => {
-      return { received: event.name };
-    });
+    await step.run("log", async () => ({ received: event.name }));
     return { ok: true };
   },
 );
 
 /**
- * syllabus/ingest — for OTHER exam custom syllabus.
- * Phase 1: stores a browsable topic tree (stub extract). Full OCR/vision in Phase 2.
+ * syllabus/ingest — OTHER exam custom syllabus (OCR path can reuse document/ingest later).
  */
 export const syllabusIngest = inngest.createFunction(
   { id: "syllabus-ingest" },
@@ -39,59 +37,24 @@ export const syllabusIngest = inngest.createFunction(
       });
     });
 
-    const topics = await step.run("extract-topics", async () => {
-      const doc = await db.document.findFirst({
-        where: { id: documentId, userId },
-      });
-      return {
-        exam: "OTHER",
-        version: "phase1-stub",
-        sourceDocumentId: documentId,
-        title: doc?.title ?? "Custom syllabus",
-        subjects: [
-          {
-            name: "General",
-            units: [
-              {
-                name: "Uploaded syllabus",
-                topics: [
-                  "Topics will be extracted by OCR in Phase 2",
-                  doc?.sourceUrl
-                    ? `Source: ${doc.sourceUrl}`
-                    : "Uploaded file",
-                ],
-              },
-            ],
-          },
-        ],
-      };
+    // Fan-out to full document ingest for OCR + pages, then mark exam READY
+    await step.sendEvent("fan-out-document-ingest", {
+      name: "document/uploaded",
+      data: { documentId, userId },
     });
 
-    await step.run("save-ready", async () => {
-      await db.document.updateMany({
-        where: { id: documentId, userId },
-        data: {
-          ingestStatus: "READY",
-          ingestProgress: 100,
-          pageCount: 1,
-        },
-      });
+    await step.run("mark-exam-pending-ocr", async () => {
       await db.examProfile.updateMany({
         where: { userId },
         data: {
-          syllabusStatus: "READY",
-          syllabusTopics: topics,
           syllabusDocumentId: documentId,
+          syllabusStatus: "PROCESSING",
         },
-      });
-      await db.user.updateMany({
-        where: { id: userId },
-        data: { onboarded: true },
       });
     });
 
-    return { ok: true, documentId };
+    return { ok: true, documentId, fannedOut: true };
   },
 );
 
-export const functions = [helloWorld, syllabusIngest];
+export const functions = [helloWorld, syllabusIngest, documentIngest];

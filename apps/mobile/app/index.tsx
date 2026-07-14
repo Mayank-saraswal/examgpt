@@ -34,6 +34,9 @@ export default function HomeScreen() {
               <Text className="text-sm text-slate-700 dark:text-slate-200">
                 Signed in as {me.data?.name ?? me.data?.id ?? "…"}
               </Text>
+              <Link href="/library" asChild>
+                <Button title="Library" />
+              </Link>
               <Link href="/onboarding" asChild>
                 <Button title="Onboarding" variant="outline" />
               </Link>

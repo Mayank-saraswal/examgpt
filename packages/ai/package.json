@@ -9,11 +9,17 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "echo \"no lint\"",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.10"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "^4.0.14",
+    "@ai-sdk/openai": "^4.0.13",
+    "ai": "^7.0.26",
+    "zod": "^4.4.3"
   }
 }

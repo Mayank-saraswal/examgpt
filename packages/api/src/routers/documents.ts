@@ -1,14 +1,15 @@
 import { TRPCError } from "@trpc/server";
+import { z } from "zod";
 import {
   presignUploadInput,
   registerUploadInput,
+  MAX_PDF_BYTES,
 } from "@examgpt/validators";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 import { createHash, randomUUID } from "node:crypto";
 
 /**
  * Storage adapter is injected via context so packages/api stays free of AWS SDK.
- * Server fills ctx.storage when creating context.
  */
 export type StorageAdapter = {
   presignPut: (opts: {
@@ -16,8 +17,17 @@ export type StorageAdapter = {
     mimeType: string;
     sizeBytes: number;
   }) => Promise<{ uploadUrl: string; publicUrl: string | null }>;
-  headObject?: (key: string) => Promise<{ contentLength: number; contentType?: string } | null>;
+  presignGet?: (key: string) => Promise<string>;
+  headObject?: (
+    key: string,
+  ) => Promise<{ contentLength: number; contentType?: string } | null>;
 };
+
+const addByUrlInput = z.object({
+  url: z.string().url().max(2000),
+  title: z.string().min(1).max(200),
+  kind: z.enum(["NOTES", "BOOK", "SYLLABUS", "PAPER"]).default("NOTES"),
+});
 
 export const documentsRouter = createTRPCRouter({
   presignUpload: protectedProcedure
@@ -30,16 +40,24 @@ export const documentsRouter = createTRPCRouter({
         });
       }
 
-      await ctx.db.user.upsert({
+      const user = await ctx.db.user.upsert({
         where: { id: ctx.userId },
         create: { id: ctx.userId },
         update: {},
       });
 
+      const quota = ctx.pageQuota ?? 2000;
+      if (user.pagesUsed >= quota) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Page quota reached (${user.pagesUsed}/${quota} pages). Delete documents or raise INGEST_PAGE_QUOTA.`,
+        });
+      }
+
       const ext =
         input.sourceType === "UPLOAD_PDF"
           ? "pdf"
-          : input.mimeType.split("/")[1] ?? "bin";
+          : (input.mimeType.split("/")[1] ?? "bin");
       const key = `users/${ctx.userId}/${input.kind.toLowerCase()}/${randomUUID()}.${ext}`;
 
       const doc = await ctx.db.document.create({
@@ -67,6 +85,8 @@ export const documentsRouter = createTRPCRouter({
         fileKey: key,
         publicUrl,
         maxBytes: input.sizeBytes,
+        pagesUsed: user.pagesUsed,
+        pageQuota: quota,
       };
     }),
 
@@ -80,7 +100,6 @@ export const documentsRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Document not found" });
       }
 
-      // Optional content-hash dedupe
       if (input.contentHash) {
         const existing = await ctx.db.document.findFirst({
           where: {
@@ -127,7 +146,6 @@ export const documentsRouter = createTRPCRouter({
         });
       }
 
-      // Kick off syllabus/document ingest in background when storage registration completes
       if (ctx.emitEvent && updated.kind === "SYLLABUS") {
         await ctx.emitEvent("syllabus/uploaded", {
           documentId: updated.id,
@@ -147,47 +165,161 @@ export const documentsRouter = createTRPCRouter({
       };
     }),
 
+  addByUrl: protectedProcedure
+    .input(addByUrlInput)
+    .mutation(async ({ ctx, input }) => {
+      const user = await ctx.db.user.upsert({
+        where: { id: ctx.userId },
+        create: { id: ctx.userId },
+        update: {},
+      });
+      const quota = ctx.pageQuota ?? 2000;
+      if (user.pagesUsed >= quota) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: `Page quota reached (${user.pagesUsed}/${quota} pages).`,
+        });
+      }
+
+      const doc = await ctx.db.document.create({
+        data: {
+          userId: ctx.userId,
+          kind: input.kind,
+          title: input.title,
+          sourceType: "URL",
+          sourceUrl: input.url,
+          mimeType: "application/pdf",
+          sizeBytes: MAX_PDF_BYTES,
+          ingestStatus: "PENDING",
+        },
+      });
+
+      if (ctx.emitEvent) {
+        await ctx.emitEvent("document/uploaded", {
+          documentId: doc.id,
+          userId: ctx.userId,
+        });
+      }
+
+      return { documentId: doc.id, status: "PENDING" as const };
+    }),
+
   list: protectedProcedure.query(async ({ ctx }) => {
     return ctx.db.document.findMany({
       where: { userId: ctx.userId, deletedAt: null },
       orderBy: { createdAt: "desc" },
+      include: {
+        pages: {
+          select: { pageNumber: true, ocrStatus: true },
+          orderBy: { pageNumber: "asc" },
+        },
+      },
     });
   }),
 
   get: protectedProcedure
-    .input((val: unknown) => {
-      if (typeof val === "string" && val.length > 0) return val;
-      throw new TRPCError({ code: "BAD_REQUEST", message: "documentId required" });
-    })
+    .input(z.object({ id: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       const doc = await ctx.db.document.findFirst({
-        where: { id: input, userId: ctx.userId, deletedAt: null },
-      });
-      if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
-      return doc;
-    }),
-
-  ingestStatus: protectedProcedure
-    .input((val: unknown) => {
-      if (typeof val === "string" && val.length > 0) return val;
-      throw new TRPCError({ code: "BAD_REQUEST", message: "documentId required" });
-    })
-    .query(async ({ ctx, input }) => {
-      const doc = await ctx.db.document.findFirst({
-        where: { id: input, userId: ctx.userId, deletedAt: null },
-        select: {
-          id: true,
-          ingestStatus: true,
-          ingestProgress: true,
-          failureReason: true,
+        where: { id: input.id, userId: ctx.userId, deletedAt: null },
+        include: {
+          pages: { orderBy: { pageNumber: "asc" } },
         },
       });
       if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
       return doc;
     }),
+
+  /** Signed URL for PDF viewer (private R2). */
+  getFileUrl: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const doc = await ctx.db.document.findFirst({
+        where: { id: input.id, userId: ctx.userId, deletedAt: null },
+      });
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
+      if (!doc.fileKey) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Document has no stored file yet",
+        });
+      }
+      if (!ctx.storage?.presignGet) {
+        // Fall back to public base URL if configured
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "File download is not configured",
+        });
+      }
+      const url = await ctx.storage.presignGet(doc.fileKey);
+      return { url, pageCount: doc.pageCount, title: doc.title };
+    }),
+
+  ingestStatus: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const doc = await ctx.db.document.findFirst({
+        where: { id: input.id, userId: ctx.userId, deletedAt: null },
+        select: {
+          id: true,
+          title: true,
+          pageCount: true,
+          ingestStatus: true,
+          ingestProgress: true,
+          failureReason: true,
+          pages: {
+            select: { pageNumber: true, ocrStatus: true },
+          },
+        },
+      });
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
+      const pagesDone = doc.pages.filter((p) => p.ocrStatus === "READY").length;
+      return {
+        ...doc,
+        pagesDone,
+        pagesTotal: doc.pageCount ?? doc.pages.length,
+      };
+    }),
+
+  retryIngest: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const doc = await ctx.db.document.findFirst({
+        where: { id: input.id, userId: ctx.userId, deletedAt: null },
+      });
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
+      await ctx.db.document.update({
+        where: { id: doc.id },
+        data: {
+          ingestStatus: "PENDING",
+          ingestProgress: 0,
+          failureReason: null,
+        },
+      });
+      if (ctx.emitEvent) {
+        await ctx.emitEvent("document/uploaded", {
+          documentId: doc.id,
+          userId: ctx.userId,
+        });
+      }
+      return { ok: true as const };
+    }),
+
+  delete: protectedProcedure
+    .input(z.object({ id: z.string().min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      const doc = await ctx.db.document.findFirst({
+        where: { id: input.id, userId: ctx.userId, deletedAt: null },
+      });
+      if (!doc) throw new TRPCError({ code: "NOT_FOUND" });
+      await ctx.db.document.update({
+        where: { id: doc.id },
+        data: { deletedAt: new Date() },
+      });
+      return { ok: true as const };
+    }),
 });
 
-/** Utility for tests / hashing client-side mirrors */
 export function sha256Hex(data: string | Buffer) {
   return createHash("sha256").update(data).digest("hex");
 }

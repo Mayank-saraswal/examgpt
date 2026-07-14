@@ -36,6 +36,8 @@ function RootStack() {
           name="notifications-permission"
           options={{ title: "Notifications" }}
         />
+        <Stack.Screen name="library/index" options={{ title: "Library" }} />
+        <Stack.Screen name="library/[docId]" options={{ title: "Document" }} />
       </Stack>
     </>
   );
