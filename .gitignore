@@ -39,6 +39,10 @@ build
 .data/
 **/.data/
 
+# local sample papers / large binaries
+*.pdf
+!packages/**/*.pdf
+
 # debug
 npm-debug.log*
 yarn-debug.log*
