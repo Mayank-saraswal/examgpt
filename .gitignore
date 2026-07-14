@@ -58,3 +58,7 @@ Thumbs.db
 # local temp
 _docs_backup_*/
 
+
+.env.local
+**/.env.local
+

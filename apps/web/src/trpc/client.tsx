@@ -68,22 +68,20 @@ function TrpcInner({
   );
 }
 
+/** Only mount when a parent <ClerkProvider> exists. */
 function ClerkAuthedProvider({ children }: { children: React.ReactNode }) {
   const { getToken } = useAuth();
-  return (
-    <TrpcInner getToken={() => getToken()}>{children}</TrpcInner>
-  );
+  return <TrpcInner getToken={() => getToken()}>{children}</TrpcInner>;
 }
 
 function NoClerkProvider({ children }: { children: React.ReactNode }) {
-  return (
-    <TrpcInner getToken={async () => null}>{children}</TrpcInner>
-  );
+  return <TrpcInner getToken={async () => null}>{children}</TrpcInner>;
 }
 
 export function TRPCReactProvider(
   props: Readonly<{ children: React.ReactNode }>,
 ) {
+  // Must match layout: only use useAuth when ClerkProvider is mounted
   const hasClerk = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
   if (hasClerk) {
     return <ClerkAuthedProvider>{props.children}</ClerkAuthedProvider>;

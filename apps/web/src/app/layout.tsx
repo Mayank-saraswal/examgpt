@@ -20,25 +20,29 @@ export const metadata: Metadata = {
   description: "AI exam tutor for competitive exams",
 };
 
-const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const body = (
-    <body className="flex min-h-full flex-col">
-      <TRPCReactProvider>{children}</TRPCReactProvider>
-    </body>
-  );
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+  const app = <TRPCReactProvider>{children}</TRPCReactProvider>;
 
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      {clerkKey ? <ClerkProvider>{body}</ClerkProvider> : body}
+      <body className="flex min-h-full flex-col">
+        {publishableKey ? (
+          <ClerkProvider publishableKey={publishableKey}>
+            {app}
+          </ClerkProvider>
+        ) : (
+          app
+        )}
+      </body>
     </html>
   );
 }
