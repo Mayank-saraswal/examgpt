@@ -23,6 +23,29 @@ export const paperExtract = inngest.createFunction(
     id: "paper-extract",
     concurrency: [{ limit: 1, key: "event.data.userId" }],
     retries: 2,
+    onFailure: async ({ event, error }) => {
+      const data = event.data.event.data as {
+        testId?: string;
+        userId?: string;
+      };
+      if (!data?.testId) return;
+      const msg =
+        error instanceof Error
+          ? error.message.slice(0, 500)
+          : "paper/extract failed";
+      await db.test.updateMany({
+        where: {
+          id: data.testId,
+          userId: data.userId,
+          status: { in: ["EXTRACTING", "PENDING"] },
+        },
+        data: { status: "FAILED", failureReason: msg },
+      });
+      logger.error(
+        { testId: data.testId, err: msg },
+        "paper/extract onFailure → FAILED",
+      );
+    },
   },
   { event: "test.paper_uploaded" },
   async ({ event, step }) => {

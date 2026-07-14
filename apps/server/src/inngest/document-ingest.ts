@@ -67,6 +67,32 @@ export const documentIngest = inngest.createFunction(
     id: "document-ingest",
     concurrency: [{ limit: 2, key: "event.data.userId" }],
     retries: 3,
+    onFailure: async ({ event, error }) => {
+      const data = event.data.event.data as {
+        documentId?: string;
+        userId?: string;
+      };
+      if (!data?.documentId) return;
+      const msg =
+        error instanceof Error
+          ? error.message.slice(0, 500)
+          : "document/ingest failed";
+      await db.document.updateMany({
+        where: {
+          id: data.documentId,
+          userId: data.userId,
+          ingestStatus: { in: ["PENDING", "PROCESSING"] },
+        },
+        data: {
+          ingestStatus: "FAILED",
+          failureReason: msg,
+        },
+      });
+      logger.error(
+        { documentId: data.documentId, err: msg },
+        "document/ingest onFailure → FAILED",
+      );
+    },
   },
   { event: "document/uploaded" },
   async ({ event, step }) => {
@@ -224,6 +250,7 @@ export const documentIngest = inngest.createFunction(
           data,
           mediaType: page.mediaType,
           pageNumber: page.pageNumber,
+          userId,
         });
         await db.documentPage.upsert({
           where: {
