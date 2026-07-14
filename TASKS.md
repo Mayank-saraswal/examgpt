@@ -403,6 +403,7 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - [ ] Web: Vercel, env wired, custom domain.
 - [ ] Mobile: EAS build profiles (dev/preview/prod), app icons/splash (no purple), deep-link/universal-link config verified in prod, store listings, TestFlight + Play internal track.
 - [ ] Staging environment + migration flow (`prisma migrate deploy` in CI).
+- **NOTE (R2):** Before any production deploy, re-verify R2 S3 credentials with `bun run scripts/r2-diagnose.ts` (expects PutObject/GetObject/HeadBucket OK). Do not ship with untested keys — prior Access Key/Secret pairs returned HTTP 403 AccessDenied despite a valid bucket and CORS. Production must use `STORAGE_BACKEND=r2` with working keys; local `/storage/local` is dev-only and must never mount in production.
 - **Acceptance:** A fresh phone installs from TestFlight/internal track, signs up with Google or email OTP, and completes the full loop against production infra.
 
 ---
