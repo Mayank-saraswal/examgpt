@@ -60,3 +60,23 @@ export {
   crossCheckCorrectKey,
   type QuestionExplainResult,
 } from "./explain";
+export {
+  allocateCounts,
+  planTopicQuotas,
+  flattenSyllabusTopics,
+  weakTopicShare,
+  type TopicVerdictLite,
+  type TopicVerdictRow,
+  type TopicQuota,
+} from "./topic-plan";
+export {
+  generateQuestionsForTopic,
+  validateGeneratedQuestion,
+  cosineSimilarity,
+  isNearDuplicate,
+  generatedQuestionSchema,
+  generatedBatchSchema,
+  qualityGateSchema,
+  type GeneratedQuestion,
+  type QualityGateResult,
+} from "./paper-generate";
