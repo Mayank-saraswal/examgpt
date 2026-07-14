@@ -56,6 +56,8 @@ model User {
   pushTokens PushToken[]
   chats      Chat[]
   aiUsage    AiUsageLog[]
+  tests      Test[]
+  attempts   Attempt[]
 }
 
 model ExamProfile {
@@ -176,4 +178,156 @@ model AiUsageLog {
 
   @@index([userId, createdAt])
   @@index([task, createdAt])
+}
+
+// ─── Phase 4 — CBT ───────────────────────────────────────────
+
+enum TestSource {
+  PYQ_UPLOAD
+  AI_GENERATED
+}
+
+enum TestStatus {
+  EXTRACTING
+  GENERATING
+  NEEDS_REVIEW
+  READY
+  FAILED
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  SUBMITTED
+  ANALYZED
+}
+
+enum SubmitType {
+  MANUAL
+  AUTO_TIMEOUT
+}
+
+enum EventType {
+  VISIT
+  LEAVE
+  SELECT
+  CHANGE
+  CLEAR
+  MARK_REVIEW
+  UNMARK_REVIEW
+  SAVE_NEXT
+  APP_BACKGROUND
+  APP_FOREGROUND
+}
+
+enum PaletteState {
+  NOT_VISITED
+  NOT_ANSWERED
+  ANSWERED
+  MARKED
+  ANSWERED_MARKED
+}
+
+model Test {
+  id                 String     @id @default(cuid())
+  userId             String
+  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  source             TestSource
+  title              String
+  paperDocumentId    String?
+  paperYear          Int?
+  config             Json?
+  durationMin        Int        @default(180)
+  totalMarks         Int        @default(0)
+  /// { correct: 4, wrong: -1, unattempted: 0 }
+  markingScheme      Json
+  status             TestStatus @default(EXTRACTING)
+  syllabusMatchScore Float?
+  failureReason      String?
+  deletedAt          DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  questions          Question[]
+  attempts           Attempt[]
+
+  @@index([userId, status])
+  @@index([userId, createdAt])
+}
+
+model Question {
+  id               String   @id @default(cuid())
+  testId           String
+  test             Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  index            Int
+  section          String?
+  text             String
+  imageKeys        String[] @default([])
+  /// [{key:"A", text, imageKey?}]
+  options          Json
+  correctKey       String?
+  answerConfidence Float?
+  topic            String?
+  subtopic         String?
+  /// User reported bad extraction — excluded from scoring
+  flagged          Boolean  @default(false)
+  explanationCache Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([testId, index])
+  @@index([testId])
+}
+
+model Attempt {
+  id          String        @id @default(cuid())
+  testId      String
+  test        Test          @relation(fields: [testId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      AttemptStatus @default(IN_PROGRESS)
+  startedAt   DateTime
+  endsAt      DateTime
+  submittedAt DateTime?
+  submitType  SubmitType?
+  score       Float?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  events      AttemptEvent[]
+  responses   Response[]
+
+  @@index([userId, status])
+  @@index([testId, userId])
+  @@index([status, endsAt])
+}
+
+model AttemptEvent {
+  id            BigInt   @id @default(autoincrement())
+  attemptId     String
+  attempt       Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionIndex Int
+  type          EventType
+  optionKey     String?
+  clientTs      DateTime
+  serverTs      DateTime @default(now())
+  batchId       String
+
+  @@index([attemptId, questionIndex])
+  @@index([attemptId, batchId])
+}
+
+model Response {
+  id            String       @id @default(cuid())
+  attemptId     String
+  attempt       Attempt      @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionIndex Int
+  selectedKey   String?
+  paletteState  PaletteState @default(NOT_VISITED)
+  timeSpentSec  Int          @default(0)
+  visitCount    Int          @default(0)
+  optionChanges Int          @default(0)
+  isCorrect     Boolean?
+  marksAwarded  Float?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([attemptId, questionIndex])
 }
