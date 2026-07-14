@@ -58,6 +58,7 @@ model User {
   aiUsage    AiUsageLog[]
   tests      Test[]
   attempts   Attempt[]
+  reports    Report[]
 }
 
 model ExamProfile {
@@ -293,6 +294,7 @@ model Attempt {
   updatedAt   DateTime      @updatedAt
   events      AttemptEvent[]
   responses   Response[]
+  report      Report?
 
   @@index([userId, status])
   @@index([testId, userId])
@@ -330,4 +332,34 @@ model Response {
   updatedAt     DateTime     @updatedAt
 
   @@unique([attemptId, questionIndex])
+}
+
+/// Post-submit analysis report (Phase 5)
+model Report {
+  id          String       @id @default(cuid())
+  attemptId   String       @unique
+  attempt     Attempt      @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      IngestStatus @default(PENDING)
+  score       Float?
+  maxScore    Float?
+  percentile  Float?
+  summary     String?
+  /// [{topic, attempted, correct, avgTimeSec, verdict: STRONG|WEAK|MODERATE}]
+  topicAnalysis    Json?
+  /// pacing + confusion aggregates
+  timeAnalysis     Json?
+  /// per-question analysis rows
+  questionAnalysis Json?
+  /// {found, year, cutoffs, sourceUrls[], verdict} — never invent cutoffs
+  cutoffData       Json?
+  /// ordered study plan items with optional doc/page refs
+  recommendations  Json?
+  failureReason    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userId, createdAt])
+  @@index([userId, status])
 }
