@@ -15,12 +15,25 @@ const storage = createStorage();
  */
 export async function createContext({ req }: CreateExpressContextOptions) {
   let userId: string | null = null;
+  let role: string | null = null;
 
   if (clerkConfigured()) {
     try {
       const auth = getAuth(req);
       if (auth.isAuthenticated && auth.userId) {
         userId = auth.userId;
+        // publicMetadata is on session claims when configured in Clerk session token
+        const claims = auth.sessionClaims as
+          | { public_metadata?: { role?: string }; metadata?: { role?: string } }
+          | undefined;
+        const meta =
+          claims?.public_metadata ??
+          (claims as { publicMetadata?: { role?: string } } | undefined)
+            ?.publicMetadata ??
+          claims?.metadata;
+        if (meta && typeof meta === "object" && "role" in meta) {
+          role = typeof meta.role === "string" ? meta.role : null;
+        }
       }
     } catch (err) {
       logger.warn({ err }, "Clerk getAuth failed");
@@ -33,10 +46,15 @@ export async function createContext({ req }: CreateExpressContextOptions) {
     ) {
       userId = authHeader.slice("Bearer ".length);
     }
+    // Dev bypass: X-ExamGPT-Role: admin + user in allowlist
+    const devRole = req.headers["x-examgpt-role"];
+    if (typeof devRole === "string") role = devRole;
   }
 
   return createContextInner({
     userId,
+    role,
+    adminUserIds: env.ADMIN_USER_IDS,
     storage,
     pageQuota: env.INGEST_PAGE_QUOTA,
     emitEvent: async (name, data) => {

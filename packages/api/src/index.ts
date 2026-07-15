@@ -8,5 +8,7 @@ export {
   createCallerFactory,
   publicProcedure,
   protectedProcedure,
+  adminProcedure,
 } from "./trpc";
+export { isAdminUser, normalizeAdminUserIds } from "./context";
 export type { StorageAdapter } from "./routers/documents";

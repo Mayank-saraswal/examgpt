@@ -14,6 +14,8 @@ const envSchema = z.object({
   CLERK_SECRET_KEY: z.string().optional(),
   CLERK_PUBLISHABLE_KEY: z.string().optional(),
   CLERK_WEBHOOK_SIGNING_SECRET: z.string().optional(),
+  /** Comma-separated Clerk user ids allowed as admins (with publicMetadata.role=admin). */
+  ADMIN_USER_IDS: z.string().optional(),
 
   // Inngest
   INNGEST_EVENT_KEY: z.string().optional(),

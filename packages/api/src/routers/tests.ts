@@ -14,7 +14,11 @@ const markingDefault = (exam?: string) =>
 export const testsRouter = createTRPCRouter({
   list: protectedProcedure.query(async ({ ctx }) => {
     return ctx.db.test.findMany({
-      where: { userId: ctx.userId, deletedAt: null },
+      where: {
+        userId: ctx.userId,
+        visibility: "PRIVATE",
+        deletedAt: null,
+      },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -32,11 +36,52 @@ export const testsRouter = createTRPCRouter({
     });
   }),
 
+  /**
+   * Published platform PYQs filtered by the user's exam profile (NEET user → NEET papers).
+   */
+  listPlatformPapers: protectedProcedure.query(async ({ ctx }) => {
+    const exam = await ctx.db.examProfile.findUnique({
+      where: { userId: ctx.userId },
+    });
+    const examType = exam?.type ?? null;
+    return ctx.db.test.findMany({
+      where: {
+        visibility: "PLATFORM",
+        deletedAt: null,
+        status: "READY",
+        publishedAt: { not: null },
+        ...(examType ? { examType } : {}),
+      },
+      orderBy: [{ paperYear: "desc" }, { title: "asc" }],
+      select: {
+        id: true,
+        title: true,
+        examType: true,
+        paperYear: true,
+        durationMin: true,
+        totalMarks: true,
+        publishedAt: true,
+        _count: { select: { questions: true } },
+      },
+    });
+  }),
+
   get: protectedProcedure
     .input(z.object({ id: z.string().min(1) }))
     .query(async ({ ctx, input }) => {
       const test = await ctx.db.test.findFirst({
-        where: { id: input.id, userId: ctx.userId, deletedAt: null },
+        where: {
+          id: input.id,
+          deletedAt: null,
+          OR: [
+            { userId: ctx.userId, visibility: "PRIVATE" },
+            {
+              visibility: "PLATFORM",
+              status: "READY",
+              publishedAt: { not: null },
+            },
+          ],
+        },
         include: {
           questions: { orderBy: { index: "asc" } },
         },
@@ -82,9 +127,11 @@ export const testsRouter = createTRPCRouter({
       const test = await ctx.db.test.create({
         data: {
           userId: ctx.userId,
+          visibility: "PRIVATE",
           source: "PYQ_UPLOAD",
           title: input.title ?? doc.title,
           paperDocumentId: doc.id,
+          examType: exam?.type ?? null,
           paperYear: input.paperYear,
           durationMin: input.durationMin ?? 180,
           totalMarks: 0,
@@ -183,8 +230,10 @@ export const testsRouter = createTRPCRouter({
       const test = await ctx.db.test.create({
         data: {
           userId: ctx.userId,
+          visibility: "PRIVATE",
           source: "AI_GENERATED",
           title: input.title,
+          examType: exam?.type ?? null,
           durationMin: input.durationMin,
           totalMarks: 0,
           markingScheme: markingDefault(exam?.type),

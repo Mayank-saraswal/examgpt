@@ -156,7 +156,7 @@ export async function upsertQuestionBankItems(
       _meta: false,
     };
     return {
-      id: questionBankPointId(item.testId, item.questionIndex),
+      id: questionBankPointId(item.testId, item.questionIndex, item.userId),
       vector: {
         [DENSE_VECTOR_NAME]: vectors[i]!,
         [SPARSE_VECTOR_NAME]: {
@@ -186,8 +186,13 @@ export async function updateQuestionBankWasCorrect(opts: {
   testId: string;
   questionIndex: number;
   wasCorrect: boolean | null;
+  userId?: string;
 }): Promise<boolean> {
-  const id = questionBankPointId(opts.testId, opts.questionIndex);
+  const id = questionBankPointId(
+    opts.testId,
+    opts.questionIndex,
+    opts.userId,
+  );
   try {
     const q = getQdrant();
     await q.setPayload(QUESTION_BANK_COLLECTION, {
@@ -208,14 +213,30 @@ export async function updateQuestionBankWasCorrect(opts: {
 /** Batch wasCorrect updates for an attempt's responses */
 export async function updateQuestionBankCorrectnessFromResponses(opts: {
   testId: string;
+  userId: string;
   responses: { questionIndex: number; isCorrect: boolean | null }[];
+  /** When true, upsert full rows (platform papers never wrote bank at extract). */
+  upsertItems?: QuestionBankItem[];
 }): Promise<number> {
+  if (opts.upsertItems && opts.upsertItems.length > 0) {
+    // Merge wasCorrect from responses into upsert items
+    const byIdx = new Map(
+      opts.responses.map((r) => [r.questionIndex, r.isCorrect]),
+    );
+    const items = opts.upsertItems.map((it) => ({
+      ...it,
+      userId: opts.userId,
+      wasCorrect: byIdx.get(it.questionIndex) ?? it.wasCorrect ?? null,
+    }));
+    return upsertQuestionBankItems(items);
+  }
   let n = 0;
   for (const r of opts.responses) {
     const ok = await updateQuestionBankWasCorrect({
       testId: opts.testId,
       questionIndex: r.questionIndex,
       wasCorrect: r.isCorrect,
+      userId: opts.userId,
     });
     if (ok) n += 1;
   }

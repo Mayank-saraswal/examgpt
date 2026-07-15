@@ -31,6 +31,7 @@ export const paperExtract = inngest.createFunction(
       const data = event.data.event.data as {
         testId?: string;
         userId?: string;
+        platform?: boolean;
       };
       if (!data?.testId) return;
       const msg =
@@ -40,8 +41,10 @@ export const paperExtract = inngest.createFunction(
       await db.test.updateMany({
         where: {
           id: data.testId,
-          userId: data.userId,
           status: { in: ["EXTRACTING", "NEEDS_REVIEW"] },
+          ...(data.platform
+            ? { visibility: "PLATFORM" as const }
+            : { userId: data.userId }),
         },
         data: { status: "FAILED", failureReason: msg },
       });
@@ -53,20 +56,25 @@ export const paperExtract = inngest.createFunction(
   },
   { event: "test.paper_uploaded" },
   async ({ event, step }) => {
-    const { testId, documentId, userId, forceContinue } = event.data as {
-      testId: string;
-      documentId: string;
-      userId: string;
-      forceContinue?: boolean;
-    };
+    const { testId, documentId, userId, forceContinue, platform } =
+      event.data as {
+        testId: string;
+        documentId: string;
+        userId: string;
+        forceContinue?: boolean;
+        platform?: boolean;
+      };
 
     const test = await step.run("load-test", async () => {
       const t = await db.test.findFirst({
-        where: { id: testId, userId, deletedAt: null },
+        where: platform
+          ? { id: testId, visibility: "PLATFORM", deletedAt: null }
+          : { id: testId, userId, deletedAt: null },
       });
       if (!t) throw new Error("Test not found");
       return t;
     });
+    const isPlatform = test.visibility === "PLATFORM" || Boolean(platform);
 
     await step.run("mark-extracting", async () => {
       await db.test.update({
@@ -76,8 +84,11 @@ export const paperExtract = inngest.createFunction(
     });
 
     const pageMarkdowns = await step.run("ocr-paper", async () => {
+      // Platform papers: document is owned by the admin who uploaded (event userId).
       const doc = await db.document.findFirst({
-        where: { id: documentId, userId },
+        where: isPlatform
+          ? { id: documentId, deletedAt: null }
+          : { id: documentId, userId },
       });
       if (!doc) throw new Error("Document not found");
 
@@ -218,7 +229,9 @@ export const paperExtract = inngest.createFunction(
       if (!test.paperDocumentId) return meta;
 
       const doc = await db.document.findFirst({
-        where: { id: test.paperDocumentId, userId },
+        where: isPlatform
+          ? { id: test.paperDocumentId, deletedAt: null }
+          : { id: test.paperDocumentId, userId },
       });
       if (!doc?.fileKey) return meta;
 
@@ -361,6 +374,11 @@ export const paperExtract = inngest.createFunction(
     });
 
     await step.run("question-bank-upsert", async () => {
+      // Platform papers: do NOT write per-user question_bank at extract time.
+      // attempt/analyze upserts for the attempting user after grading.
+      if (isPlatform) {
+        return { n: 0, skipped: true as const };
+      }
       try {
         await ensureQuestionBankCollection();
         const qs = await db.question.findMany({
@@ -390,8 +408,10 @@ export const paperExtract = inngest.createFunction(
       if (t?.status === "READY") {
         await sendPushToUser(
           userId,
-          "Paper ready",
-          `"${t.title}" is ready — start your test.`,
+          isPlatform ? "Platform paper extracted" : "Paper ready",
+          isPlatform
+            ? `"${t.title}" is READY — publish from admin when verified.`
+            : `"${t.title}" is ready — start your test.`,
           { testId, kind: "READY" },
         );
       } else if (t?.status === "NEEDS_REVIEW") {

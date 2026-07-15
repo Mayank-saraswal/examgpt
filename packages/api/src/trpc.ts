@@ -1,5 +1,5 @@
 import { initTRPC, TRPCError } from "@trpc/server";
-import type { Context } from "./context";
+import { isAdminUser, type Context } from "./context";
 
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape }) {
@@ -27,6 +27,32 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
     ctx: {
       ...ctx,
       userId: ctx.userId,
+    },
+  });
+});
+
+/**
+ * Admin: Clerk publicMetadata.role === "admin" AND userId ∈ ADMIN_USER_IDS.
+ * Both gates must pass (server-side). Non-admin → FORBIDDEN.
+ */
+export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (
+    !isAdminUser({
+      userId: ctx.userId,
+      role: ctx.role,
+      adminUserIds: ctx.adminUserIds,
+    })
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Admin access required",
+    });
+  }
+  return next({
+    ctx: {
+      ...ctx,
+      userId: ctx.userId,
+      role: "admin" as const,
     },
   });
 });

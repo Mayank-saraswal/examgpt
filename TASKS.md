@@ -425,15 +425,15 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 
 **HARD INVARIANT:** attempts, reports, chat, and Qdrant user filters stay user-scoped. Platform content is read-only shared; every attempt/report still has exactly one `userId`.
 
-- [ ] Schema migration: `TestVisibility` enum; `userId String?` with check (PRIVATE ⇒ userId set); `examType` (or join ExamType), `paperYear`, `publishedAt`, `contentHash` for admin dedupe. Indexes: `(visibility, publishedAt)`, `(visibility, examType, paperYear)`.
-- [ ] `adminProcedure`: requires `Clerk JWT publicMetadata.role === "admin"` **AND** `userId ∈ ADMIN_USER_IDS` env allowlist (both). Non-admin → `FORBIDDEN`. Wire role into tRPC ctx from Clerk session claims (see clerk-backend-api skill).
-- [ ] Web-only `/admin` UI behind same check (redirect / not-found for non-admins). No emoji; no purple; lucide only.
-- [ ] Admin: upload PYQ (exam + year + PDF via existing presign) → same `paper/extract` (incl. diagram crops) → reuse review screen → Publish/Unpublish; list platform papers + status; AiUsageLog summary page.
-- [ ] question_bank timing: platform extract does **not** write per-user bank rows; `attempt/analyze` upserts after grading for the attempting user. Adjust `scripts/backfill-question-bank.ts`.
-- [ ] User-facing: Tests → "Previous Year Papers" tab (web + mobile): published platform papers filtered by user exam profile; year badges; Start test (no upload wait). Attempt/report/cutoff identical to PYQ uploads.
-- [ ] Dedupe: admin upload with existing `contentHash` warns + links to existing platform paper.
-- [ ] Empty/loading/error states on all admin + PYQ tab screens.
-- [ ] Unit tests: adminProcedure authz; platform visibility filter by exam; question_bank write-timing (extract no-write, analyze write).
+- [x] Schema migration: `TestVisibility` enum; `userId String?` with check (PRIVATE ⇒ userId set); `examType`, `paperYear`, `publishedAt`, `contentHash` for admin dedupe. Indexes: `(visibility, publishedAt)`, `(visibility, examType, paperYear)`. Migration `20260715190000_phase75_platform_papers`.
+- [x] `adminProcedure`: requires `Clerk JWT publicMetadata.role === "admin"` **AND** `userId ∈ ADMIN_USER_IDS` env allowlist (both). Non-admin → `FORBIDDEN`. Role wired into tRPC ctx from Clerk session claims (+ dev `X-ExamGPT-Role` header).
+- [x] Web-only `/admin` UI behind same check (not-found style page for non-admins). No emoji; no purple; lucide only.
+- [x] Admin: upload PYQ (exam + year + PDF via existing presign) → same `paper/extract` (incl. diagram crops) → review screen → Publish/Unpublish; list platform papers + status; AiUsageLog summary page (`/admin/usage` shows report `totalCostUsd` rollup).
+- [x] question_bank timing: platform extract does **not** write per-user bank rows; `attempt/analyze` upserts after grading for the attempting user (point id includes userId). Adjusted `scripts/backfill-question-bank.ts`.
+- [x] User-facing: Tests → "Previous Year Papers" tab (web + mobile): published platform papers filtered by user exam profile; year badges; Start test (no upload wait). Attempt/report/cutoff identical to PYQ uploads.
+- [x] Dedupe: admin upload with existing `contentHash` warns + links to existing platform paper.
+- [x] Empty/loading/error states on all admin + PYQ tab screens.
+- [x] Unit tests: adminProcedure authz; platform visibility filter by exam; question_bank write-timing (extract no-write, analyze write).
 - [ ] Live-verify: set `publicMetadata.role=admin` + `ADMIN_USER_IDS`; admin-upload one NEET PYQ → publish → start from Previous Year Papers → report. Record here.
 
 **Diagram support (prerequisite for platform PYQ quality):**

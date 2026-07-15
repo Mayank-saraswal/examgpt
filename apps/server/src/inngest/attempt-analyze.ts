@@ -435,12 +435,26 @@ export const attemptAnalyze = inngest.createFunction(
 
     await step.run("question-bank-wasCorrect", async () => {
       try {
+        const isPlatform = attempt.test.visibility === "PLATFORM";
+        // Platform: extract skipped bank write — full upsert per attempting user.
+        // Private: update wasCorrect on existing points (also pass userId for id).
         const n = await updateQuestionBankCorrectnessFromResponses({
           testId: attempt.testId,
+          userId,
           responses: scoredResponses.rows.map((r) => ({
             questionIndex: r.questionIndex,
             isCorrect: r.isCorrect ?? null,
           })),
+          upsertItems: isPlatform
+            ? freshQuestions.map((q) => ({
+                userId,
+                testId: attempt.testId,
+                questionIndex: q.index,
+                topic: q.topic ?? q.section ?? "Untagged",
+                text: q.text,
+                wasCorrect: null,
+              }))
+            : undefined,
         });
         return { updated: n };
       } catch (err) {

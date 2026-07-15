@@ -18,6 +18,7 @@ export default function TestsScreen() {
   const { isSignedIn } = useAuth();
   const qc = useQueryClient();
   const router = useRouter();
+  const [tab, setTab] = useState<"mine" | "pyq">("mine");
   const [docId, setDocId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [genTitle, setGenTitle] = useState("Adaptive practice");
@@ -28,16 +29,20 @@ export default function TestsScreen() {
 
   const list = useQuery({
     ...trpc.tests.list.queryOptions(),
-    enabled: !!isSignedIn,
+    enabled: !!isSignedIn && tab === "mine",
     refetchInterval: 5000,
+  });
+  const platform = useQuery({
+    ...trpc.tests.listPlatformPapers.queryOptions(),
+    enabled: !!isSignedIn && tab === "pyq",
   });
   const docs = useQuery({
     ...trpc.documents.list.queryOptions(),
-    enabled: !!isSignedIn,
+    enabled: !!isSignedIn && tab === "mine",
   });
   const genTopics = useQuery({
     ...trpc.tests.generationTopics.queryOptions(),
-    enabled: !!isSignedIn,
+    enabled: !!isSignedIn && tab === "mine",
   });
 
   const topics = [
@@ -53,6 +58,66 @@ export default function TestsScreen() {
         Tests
       </Text>
 
+      <View className="mb-4 flex-row gap-2">
+        <Pressable
+          onPress={() => setTab("mine")}
+          className={`rounded-full px-3 py-1 ${
+            tab === "mine" ? "bg-blue-600" : "border border-slate-300"
+          }`}
+        >
+          <Text
+            className={`text-xs ${tab === "mine" ? "text-white" : "text-slate-600"}`}
+          >
+            My tests
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setTab("pyq")}
+          className={`rounded-full px-3 py-1 ${
+            tab === "pyq" ? "bg-blue-600" : "border border-slate-300"
+          }`}
+        >
+          <Text
+            className={`text-xs ${tab === "pyq" ? "text-white" : "text-slate-600"}`}
+          >
+            Previous Year Papers
+          </Text>
+        </Pressable>
+      </View>
+
+      {tab === "pyq" && (
+        <View className="mb-6">
+          <Text className="mb-2 text-sm text-slate-500">
+            Published platform papers for your exam — no upload wait.
+          </Text>
+          {platform.isLoading && (
+            <ActivityIndicator color="#2563eb" className="my-4" />
+          )}
+          {platform.data?.length === 0 && (
+            <Text className="text-sm text-slate-500">
+              No previous year papers published yet.
+            </Text>
+          )}
+          {platform.data?.map((p) => (
+            <Pressable
+              key={p.id}
+              onPress={() => router.push(`/tests/${p.id}`)}
+              className="mb-2 rounded-xl border border-slate-200 px-3 py-3 dark:border-slate-800"
+            >
+              <Text className="font-medium text-slate-900 dark:text-slate-50">
+                {p.title}
+              </Text>
+              <Text className="mt-1 text-xs text-slate-500">
+                {p.paperYear ?? "—"} · {p.examType ?? "Exam"} ·{" "}
+                {p._count.questions} Q · Start test
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {tab === "mine" && (
+      <>
       <Text className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-200">
         PYQ from library
       </Text>
@@ -226,6 +291,8 @@ export default function TestsScreen() {
         <Text className="text-sm text-slate-500">No tests yet.</Text>
       )}
       {list.isLoading && <ActivityIndicator color="#2563eb" />}
+      </>
+      )}
       <View className="h-10" />
     </ScrollView>
   );

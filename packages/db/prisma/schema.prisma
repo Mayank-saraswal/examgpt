@@ -188,6 +188,12 @@ enum TestSource {
   AI_GENERATED
 }
 
+/// PRIVATE = user-owned; PLATFORM = shared catalog (userId nullable).
+enum TestVisibility {
+  PRIVATE
+  PLATFORM
+}
+
 enum TestStatus {
   EXTRACTING
   GENERATING
@@ -229,29 +235,39 @@ enum PaletteState {
 }
 
 model Test {
-  id                 String     @id @default(cuid())
-  userId             String
-  user               User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                 String         @id @default(cuid())
+  /// Null only when visibility=PLATFORM (platform-owned catalog). PRIVATE requires userId.
+  userId             String?
+  user               User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  visibility         TestVisibility @default(PRIVATE)
   source             TestSource
   title              String
   paperDocumentId    String?
+  /// Exam family for platform PYQ filtering (user profile match)
+  examType           ExamType?
   paperYear          Int?
+  publishedAt        DateTime?
+  /// SHA-256 of PDF bytes for admin dedupe of platform papers
+  contentHash        String?
   config             Json?
-  durationMin        Int        @default(180)
-  totalMarks         Int        @default(0)
+  durationMin        Int            @default(180)
+  totalMarks         Int            @default(0)
   /// { correct: 4, wrong: -1, unattempted: 0 }
   markingScheme      Json
-  status             TestStatus @default(EXTRACTING)
+  status             TestStatus     @default(EXTRACTING)
   syllabusMatchScore Float?
   failureReason      String?
   deletedAt          DateTime?
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
   questions          Question[]
   attempts           Attempt[]
 
   @@index([userId, status])
   @@index([userId, createdAt])
+  @@index([visibility, publishedAt])
+  @@index([visibility, examType, paperYear])
+  @@index([contentHash])
 }
 
 model Question {

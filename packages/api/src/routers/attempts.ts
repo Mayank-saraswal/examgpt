@@ -35,9 +35,15 @@ export const attemptsRouter = createTRPCRouter({
       const test = await ctx.db.test.findFirst({
         where: {
           id: input.testId,
-          userId: ctx.userId,
           deletedAt: null,
           status: "READY",
+          OR: [
+            { userId: ctx.userId, visibility: "PRIVATE" },
+            {
+              visibility: "PLATFORM",
+              publishedAt: { not: null },
+            },
+          ],
         },
         include: { questions: { select: { id: true } } },
       });

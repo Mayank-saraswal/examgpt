@@ -4,17 +4,20 @@ import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Loader2, FlaskConical, Sparkles, Upload } from "lucide-react";
+import { Loader2, FlaskConical, Sparkles, Upload, Library } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
 import { cn } from "@/lib/utils";
 
+type Tab = "mine" | "pyq";
+
 export default function TestsPage() {
   const { isSignedIn, isLoaded } = useAuth();
   const trpc = useTRPC();
   const qc = useQueryClient();
+  const [tab, setTab] = useState<Tab>("mine");
   const [docId, setDocId] = useState("");
   const [title, setTitle] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -32,13 +35,18 @@ export default function TestsPage() {
 
   const list = useQuery({
     ...trpc.tests.list.queryOptions(),
-    enabled: isLoaded && !!isSignedIn,
+    enabled: isLoaded && !!isSignedIn && tab === "mine",
     refetchInterval: 5000,
+  });
+
+  const platform = useQuery({
+    ...trpc.tests.listPlatformPapers.queryOptions(),
+    enabled: isLoaded && !!isSignedIn && tab === "pyq",
   });
 
   const docs = useQuery({
     ...trpc.documents.list.queryOptions(),
-    enabled: isLoaded && !!isSignedIn,
+    enabled: isLoaded && !!isSignedIn && tab === "mine",
   });
 
   const genTopicsOpts = trpc.tests.generationTopics.queryOptions();
@@ -94,6 +102,82 @@ export default function TestsPage() {
         </Link>
       </header>
 
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setTab("mine")}
+          className={cn(
+            "rounded-full px-3 py-1.5 text-sm",
+            tab === "mine"
+              ? "bg-[var(--eg-primary)] text-white"
+              : "border border-[var(--eg-border)] text-[var(--eg-muted-fg)]",
+          )}
+        >
+          My tests
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("pyq")}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm",
+            tab === "pyq"
+              ? "bg-[var(--eg-primary)] text-white"
+              : "border border-[var(--eg-border)] text-[var(--eg-muted-fg)]",
+          )}
+        >
+          <Library className="size-3.5" aria-hidden />
+          Previous Year Papers
+        </button>
+      </div>
+
+      {tab === "pyq" && (
+        <section className="flex flex-col gap-3">
+          <p className="text-sm text-[var(--eg-muted-fg)]">
+            Official previous-year papers for your exam profile. No upload —
+            start a test immediately when published.
+          </p>
+          {platform.isLoading && <LoadingState label="Loading papers…" />}
+          {platform.isError && (
+            <ErrorState
+              title="Could not load previous year papers"
+              description={platform.error.message}
+              onRetry={() => void platform.refetch()}
+            />
+          )}
+          {platform.data && platform.data.length === 0 && (
+            <EmptyState
+              title="No previous year papers yet"
+              description="Check back after your exam’s papers are published by ExamGPT."
+            />
+          )}
+          <ul className="flex flex-col gap-2">
+            {platform.data?.map((p) => (
+              <li key={p.id}>
+                <Link
+                  href={`/tests/${p.id}`}
+                  className="block rounded-xl border border-[var(--eg-border)] px-4 py-3 hover:border-[var(--eg-primary)]"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium">{p.title}</p>
+                    {p.paperYear != null && (
+                      <span className="rounded-full border border-[var(--eg-border)] px-2 py-0.5 text-xs font-medium">
+                        {p.paperYear}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-sm text-[var(--eg-muted-fg)]">
+                    {p.examType ?? "Exam"} · {p._count.questions} questions ·{" "}
+                    {p.durationMin} min · Start test
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {tab === "mine" && (
+      <>
       <section className="rounded-xl border border-[var(--eg-border)] p-4">
         <h2 className="flex items-center gap-2 font-medium">
           <Upload className="size-4" aria-hidden /> Upload previous year paper
@@ -354,6 +438,8 @@ export default function TestsPage() {
           />
         )}
       </ul>
+      </>
+      )}
     </div>
   );
 }
