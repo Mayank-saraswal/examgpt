@@ -3,8 +3,10 @@ import {
   flattenSyllabusTopics,
   generateQuestionsForTopic,
   JEE_MARKING,
+  mergeVerdictsWithBankAccuracy,
   NEET_MARKING,
   planTopicQuotas,
+  runQualityRegenLoop,
   validateGeneratedQuestion,
   type GeneratedQuestion,
   type MarkingScheme,
@@ -20,6 +22,7 @@ import { hybridSearchStudyChunks } from "../qdrant/search";
 import {
   ensureQuestionBankCollection,
   isDuplicateInQuestionBank,
+  topicAccuracyFromQuestionBank,
   upsertQuestionBankItems,
 } from "../qdrant/question-bank";
 import { sendPushToUser } from "../push";
@@ -85,7 +88,7 @@ export const paperGenerate = inngest.createFunction(
       difficulty?: "easy" | "medium" | "hard" | "mixed";
       mode?: "auto" | "manual";
     };
-    const questionCount = config.questionCount ?? 45;
+    const questionCount = config.questionCount ?? 20;
     const difficulty = config.difficulty ?? "mixed";
     const mode =
       config.mode ??
@@ -96,7 +99,10 @@ export const paperGenerate = inngest.createFunction(
       const examType = exam?.type ?? "NEET";
 
       let syllabusTopics = flattenSyllabusTopics(exam?.syllabusTopics);
-      if (syllabusTopics.length === 0 && (examType === "NEET" || examType === "JEE")) {
+      if (
+        syllabusTopics.length === 0 &&
+        (examType === "NEET" || examType === "JEE")
+      ) {
         const bundled =
           examType === "JEE" ? bundledSyllabus.JEE : bundledSyllabus.NEET;
         syllabusTopics = flattenSyllabusTopics(bundled);
@@ -129,9 +135,17 @@ export const paperGenerate = inngest.createFunction(
           }
         }
       }
-      const topicVerdicts: TopicVerdictRow[] = [...verdictMap.entries()].map(
+      let topicVerdicts: TopicVerdictRow[] = [...verdictMap.entries()].map(
         ([topic, verdict]) => ({ topic, verdict }),
       );
+
+      // Merge question_bank historical accuracy
+      try {
+        const bankAcc = await topicAccuracyFromQuestionBank(userId);
+        topicVerdicts = mergeVerdictsWithBankAccuracy(topicVerdicts, bankAcc);
+      } catch (err) {
+        logger.warn({ err }, "bank accuracy merge failed");
+      }
 
       const quotas = planTopicQuotas({
         questionCount,
@@ -142,93 +156,96 @@ export const paperGenerate = inngest.createFunction(
       });
 
       logger.info(
-        { testId, mode, quotas, examType },
+        { testId, mode, quotas, examType, hasReports: reports.length > 0 },
         "paper/generate topic plan",
       );
-      return { quotas, examType, topicVerdicts };
+      return { quotas, examType, topicVerdicts, syllabusTopics };
     });
 
     const generated = await step.run("generate-and-gate", async () => {
-      const accepted: GeneratedQuestion[] = [];
+      const accepted: (GeneratedQuestion & {
+        fromSyllabusOnly?: boolean;
+      })[] = [];
       const dropped: string[] = [];
+      const topicWarnings: string[] = [];
 
       for (const quota of plan.quotas as TopicQuota[]) {
-        let remaining = quota.count;
-        let round = 0;
-        while (remaining > 0 && round <= MAX_REGEN_ROUNDS) {
-          round += 1;
-          let notesContext = "";
-          try {
-            const chunks = await hybridSearchStudyChunks({
-              userId,
-              query: `${quota.topic} exam practice concepts`,
-              topK: 6,
-            });
-            notesContext = chunks
-              .map((c) => `[p.${c.pageNumber}] ${c.text}`)
-              .join("\n\n");
-          } catch (err) {
-            logger.warn({ err, topic: quota.topic }, "notes retrieve failed");
+        let notesContext = "";
+        let fromSyllabusOnly = false;
+        try {
+          const chunks = await hybridSearchStudyChunks({
+            userId,
+            query: `${quota.topic} exam practice concepts definitions formulas`,
+            topK: 6,
+          });
+          notesContext = chunks
+            .map((c) => `[p.${c.pageNumber}] ${c.text}`)
+            .join("\n\n");
+          if (chunks.length === 0 || notesContext.trim().length < 80) {
+            fromSyllabusOnly = true;
+            topicWarnings.push(
+              `No notes found for "${quota.topic}" — generated from syllabus knowledge only`,
+            );
           }
+        } catch (err) {
+          logger.warn({ err, topic: quota.topic }, "notes retrieve failed");
+          fromSyllabusOnly = true;
+          topicWarnings.push(
+            `Notes retrieval failed for "${quota.topic}" — syllabus-only generation`,
+          );
+        }
 
-          let batch: GeneratedQuestion[] = [];
-          try {
-            batch = await generateQuestionsForTopic({
+        const loop = await runQualityRegenLoop(quota.count, {
+          maxRounds: MAX_REGEN_ROUNDS,
+          generate: async (need) => {
+            const batch = await generateQuestionsForTopic({
               userId,
               topic: quota.topic,
-              count: remaining,
+              count: need,
               difficulty,
               examType: plan.examType,
               notesContext,
               avoidStems: accepted.map((q) => q.text),
             });
-          } catch (err) {
-            logger.warn({ err, topic: quota.topic }, "generate batch failed");
-            break;
-          }
-
-          for (const q of batch) {
-            if (remaining <= 0) break;
-
-            // Dedupe vs question_bank
-            let dup = false;
+            return batch.map((q) => ({ ...q, fromSyllabusOnly }));
+          },
+          isDuplicate: async (q) => {
             try {
               const vec = await embedText(q.text, userId);
-              dup = await isDuplicateInQuestionBank({
+              return await isDuplicateInQuestionBank({
                 userId,
                 stem: q.text,
                 denseVector: vec,
               });
             } catch {
-              dup = false;
+              return false;
             }
-            if (dup) {
-              dropped.push(`dup:${quota.topic}`);
-              continue;
-            }
-
+          },
+          validate: async (q) => {
             const gate = await validateGeneratedQuestion({
               userId,
               question: q,
             });
-            if (!gate.valid) {
-              dropped.push(`gate:${quota.topic}:${gate.reason}`);
-              continue;
-            }
+            return { valid: gate.valid, reason: gate.reason };
+          },
+        });
 
-            accepted.push(q);
-            remaining -= 1;
-          }
-        }
+        accepted.push(...loop.accepted);
+        dropped.push(...loop.dropped);
       }
 
       if (accepted.length < Math.min(5, questionCount)) {
         throw new Error(
-          `Too few valid questions generated (${accepted.length}). Dropped: ${dropped.slice(0, 10).join("; ")}`,
+          `Too few valid questions generated (${accepted.length} of ${questionCount}). ${dropped.slice(0, 8).join("; ")}`,
         );
       }
 
-      return { accepted, dropped };
+      return {
+        accepted,
+        dropped,
+        topicWarnings,
+        requested: questionCount,
+      };
     });
 
     await step.run("persist-questions", async () => {
@@ -246,19 +263,25 @@ export const paperGenerate = inngest.createFunction(
             text: q.text,
             options: q.options as unknown as Prisma.InputJsonValue,
             correctKey: q.correctKey.toUpperCase(),
-            answerConfidence: 0.85,
+            answerConfidence: q.fromSyllabusOnly ? 0.7 : 0.85,
             topic: q.topic,
             subtopic: q.subtopic ?? null,
             flagged: false,
-            explanationCache: q.briefExplanation
-              ? ({ explanation: q.briefExplanation } as Prisma.InputJsonValue)
-              : undefined,
+            explanationCache: {
+              explanation: q.briefExplanation ?? null,
+              fromSyllabusOnly: q.fromSyllabusOnly ?? false,
+            } as Prisma.InputJsonValue,
           },
         });
         index += 1;
       }
 
       const totalMarks = generated.accepted.length * scheme.correct;
+      const qualityMessage =
+        generated.accepted.length < generated.requested
+          ? `${generated.accepted.length} of ${generated.requested} questions passed quality checks`
+          : null;
+
       await db.test.update({
         where: { id: testId },
         data: {
@@ -270,14 +293,16 @@ export const paperGenerate = inngest.createFunction(
             ...config,
             mode,
             plannedTopics: plan.quotas,
+            requestedCount: generated.requested,
             generatedCount: generated.accepted.length,
-            droppedHints: generated.dropped.slice(0, 20),
+            qualityMessage,
+            topicWarnings: generated.topicWarnings.slice(0, 20),
+            droppedHints: generated.dropped.slice(0, 30),
             topicVerdicts: plan.topicVerdicts,
           } as unknown as Prisma.InputJsonValue,
         },
       });
 
-      // Index into question_bank for future dedupe
       try {
         await upsertQuestionBankItems(
           generated.accepted.map((q, i) => ({
@@ -287,6 +312,7 @@ export const paperGenerate = inngest.createFunction(
             topic: q.topic,
             text: q.text,
             wasCorrect: null,
+            fromSyllabusOnly: q.fromSyllabusOnly ?? false,
           })),
         );
       } catch (err) {
@@ -295,18 +321,21 @@ export const paperGenerate = inngest.createFunction(
     });
 
     await step.run("push-ready", async () => {
-      await sendPushToUser(
-        userId,
-        "Paper ready",
-        `Your AI paper "${test.title}" is ready (${generated.accepted.length} questions).`,
-        { testId, type: "paper_ready" },
-      );
+      const body =
+        generated.accepted.length < generated.requested
+          ? `"${test.title}" ready — ${generated.accepted.length} of ${generated.requested} questions passed quality checks.`
+          : `Your AI paper "${test.title}" is ready (${generated.accepted.length} questions).`;
+      await sendPushToUser(userId, "Paper ready", body, {
+        testId,
+        type: "paper_ready",
+      });
     });
 
     return {
       ok: true,
       testId,
       count: generated.accepted.length,
+      requested: generated.requested,
       dropped: generated.dropped.length,
     };
   },

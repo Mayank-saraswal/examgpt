@@ -4,10 +4,35 @@ import { useAuth } from "@clerk/nextjs";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { useMemo } from "react";
 import { Loader2 } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+type TestView = {
+  id: string;
+  title: string;
+  status: string;
+  source: string;
+  durationMin: number;
+  syllabusMatchScore: number | null;
+  failureReason: string | null;
+  config: {
+    qualityMessage?: string | null;
+    topicWarnings?: string[];
+    requestedCount?: number;
+    generatedCount?: number;
+  } | null;
+  questions: {
+    id: string;
+    index: number;
+    section: string | null;
+    text: string;
+    flagged: boolean;
+    answerConfidence: number | null;
+  }[];
+};
 
 export default function TestDetailPage() {
   const { testId } = useParams<{ testId: string }>();
@@ -16,40 +41,45 @@ export default function TestDetailPage() {
   const qc = useQueryClient();
   const router = useRouter();
 
+  const getOpts = trpc.tests.get.queryOptions({ id: testId });
   const test = useQuery({
-    ...trpc.tests.get.queryOptions({ id: testId }),
+    queryKey: getOpts.queryKey,
+    queryFn: getOpts.queryFn,
     enabled: isLoaded && !!isSignedIn && !!testId,
     refetchInterval: (q) => {
-      const s = q.state.data?.status;
+      const s = (q.state.data as { status?: string } | undefined)?.status;
       return s === "EXTRACTING" || s === "GENERATING" ? 3000 : false;
     },
   });
 
-  const confirm = useMutation(
-    trpc.tests.confirmMismatchedPaper.mutationOptions({
-      onSuccess: () => void qc.invalidateQueries(trpc.tests.get.queryFilter({ id: testId })),
-    }),
-  );
+  const confirmOpts = trpc.tests.confirmMismatchedPaper.mutationOptions();
+  const confirm = useMutation({
+    mutationFn: confirmOpts.mutationFn,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: getOpts.queryKey }),
+  });
 
-  const finishReview = useMutation(
-    trpc.tests.finishReview.mutationOptions({
-      onSuccess: () => void qc.invalidateQueries(trpc.tests.get.queryFilter({ id: testId })),
-    }),
-  );
+  const finishOpts = trpc.tests.finishReview.mutationOptions();
+  const finishReview = useMutation({
+    mutationFn: finishOpts.mutationFn,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: getOpts.queryKey }),
+  });
 
-  const flagQ = useMutation(
-    trpc.tests.reviewQuestions.mutationOptions({
-      onSuccess: () => void qc.invalidateQueries(trpc.tests.get.queryFilter({ id: testId })),
-    }),
-  );
+  const flagOpts = trpc.tests.reviewQuestions.mutationOptions();
+  const flagQ = useMutation({
+    mutationFn: flagOpts.mutationFn,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: getOpts.queryKey }),
+  });
 
-  const start = useMutation(
-    trpc.attempts.start.mutationOptions({
-      onSuccess: (r) => router.push(`/exam/${r.attemptId}`),
-    }),
-  );
+  const startOpts = trpc.attempts.start.mutationOptions();
+  const start = useMutation({
+    mutationFn: startOpts.mutationFn,
+    onSuccess: (r: { attemptId: string }) => router.push(`/exam/${r.attemptId}`),
+  });
 
-  const t = test.data;
+  const t = useMemo(() => {
+    if (!test.data) return null;
+    return JSON.parse(JSON.stringify(test.data)) as TestView;
+  }, [test.data]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -63,9 +93,33 @@ export default function TestDetailPage() {
           <h1 className="text-2xl font-semibold">{t.title}</h1>
           <p className="mt-1 text-sm text-[var(--eg-muted-fg)]">
             Status: <strong>{t.status}</strong>
+            {t.source === "AI_GENERATED" ? " · AI generated" : ""}
             {t.syllabusMatchScore != null &&
               ` · syllabus match ${Math.round(t.syllabusMatchScore * 100)}%`}
           </p>
+          {(() => {
+            const cfg = t.config as {
+              qualityMessage?: string | null;
+              topicWarnings?: string[];
+              requestedCount?: number;
+              generatedCount?: number;
+            } | null;
+            if (!cfg) return null;
+            return (
+              <div className="mt-2 space-y-1 text-sm">
+                {cfg.qualityMessage && (
+                  <p className="text-amber-800 dark:text-amber-200">
+                    {cfg.qualityMessage}
+                  </p>
+                )}
+                {cfg.topicWarnings?.slice(0, 5).map((w) => (
+                  <p key={w} className="text-xs text-[var(--eg-muted-fg)]">
+                    {w}
+                  </p>
+                ))}
+              </div>
+            );
+          })()}
 
           {(t.status === "EXTRACTING" || t.status === "GENERATING") && (
             <div className="mt-6 rounded-xl border border-[var(--eg-border)] p-6 text-center">

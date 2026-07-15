@@ -386,13 +386,13 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
   - Unit tests: analysis pure helpers (7) in `packages/ai`. Live full-loop still depends on paper OCR quota + Clerk browser session.
 
 ### Phase 6 — AI paper generation (adaptive)
-- [x] Config UI: question count, duration, topic multi-select from syllabus tree (or "auto"), difficulty. Web `/tests` + mobile tests screen; `tests.generationTopics` + `tests.createGenerated`.
-- [x] `paper/generate` per §6: weak-topic weighting from reports (50% weak / 30% moderate / 20% strong when "auto"), grounded in notes chunks via hybrid retrieval, standard marking scheme by exam type. Inngest `test.generate_requested` → `paper-generate`.
-- [x] Dedupe against `question_bank` Qdrant collection (cosine ≥ 0.88 → drop/regenerate). Upsert after generation.
-- [x] Quality gate: second model pass (`validateGeneratedQuestion`) + deterministic option checks; max 2 regen rounds per topic batch, drop + log failures.
-- [x] Same CBT window + analysis pipeline; AI papers use **target-score (75% of max)** instead of official cutoff in `attempt/analyze` + report UI.
-- **Acceptance:** After a Phase-5 report with weak topics, generate an "auto" paper → weak topics visibly overrepresented; no near-duplicate of a previously seen question; full attempt+report loop works on a generated paper.
-  - Unit tests: topic-plan (4) + paper-generate cosine (2). Live gen needs OpenRouter/OpenAI keys + notes in Qdrant.
+- [x] **Prerequisite `question_bank` (TASKS §5):** Qdrant dense+sparse, payload `{userId,testId,questionIndex,topic,wasCorrect?,text}`, userId index, deterministic IDs `sha1(testId:questionIndex)`. Written by `paper/extract` after READY; `attempt/analyze` updates `wasCorrect`. Backfill: `bun run scripts/backfill-question-bank.ts`.
+- [x] Config UI: question count, duration, difficulty, topic multi-select from syllabus tree or "auto". Web `/tests` + mobile tests; `tests.generationTopics` + `tests.createGenerated`.
+- [x] `paper/generate` Inngest: auto mix 50/30/20 weak/moderate/strong from latest Report `topicAnalysis` + question_bank accuracy; notes retrieval per topic before `generateObject`; NEET/JEE marking. No-notes topic → syllabus-only + UI warning; no prior reports → uniform syllabus distribution.
+- [x] Dedupe vs `question_bank` (cosine ≥ 0.88); new questions upserted to bank. Quality gate + regen max 2 rounds; never pad — UI shows "N of M passed quality checks".
+- [x] Same CBT + analyze; AI papers → target-score (75% max) instead of cutoff. Push on READY. FAILED + retry via recreate.
+- **Acceptance:** Auto 20Q after Phase-5 report → weak topics overrepresented; no near-dupes; attempt→report with target-score. Unit: topic-plan weights/missing buckets, quality-loop, point-ID determinism.
+  - Gemini live full-loop (Phase 4–5) still pending user confirmation of billing.
 
 ### Phase 7 — Hardening + polish
 - [ ] Rate limits (per-user per-route), request size caps, Helmet, dependency audit.
