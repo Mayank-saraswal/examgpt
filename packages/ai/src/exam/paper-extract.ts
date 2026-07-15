@@ -3,9 +3,20 @@ import { z } from "zod";
 import { getLanguageModel, getTaskModelId } from "../providers";
 import { withAiUsage } from "../usage";
 
+/** Gemini-style normalized bbox 0–1000 (ymin, xmin, ymax, xmax). */
+export const normalizedBBoxSchema = z.object({
+  ymin: z.number(),
+  xmin: z.number(),
+  ymax: z.number(),
+  xmax: z.number(),
+});
+
 export const extractedOptionSchema = z.object({
   key: z.string().min(1).max(4),
   text: z.string().min(1),
+  /** Optional figure attached only to this option (rare) */
+  hasImage: z.boolean().nullable(),
+  imageBbox: normalizedBBoxSchema.nullable(),
 });
 
 /**
@@ -21,6 +32,14 @@ export const extractedQuestionSchema = z.object({
   correctKey: z.string().nullable(),
   topic: z.string().nullable(),
   subtopic: z.string().nullable(),
+  /** True if stem/options reference a figure/graph/diagram on the page */
+  hasFigure: z.boolean().nullable(),
+  /** Normalized bbox of primary figure for this question (0–1000), null if none */
+  figureBbox: normalizedBBoxSchema.nullable(),
+  /** Model uncertain about crop quality (OpenAI degraded path) */
+  figureUncertain: z.boolean().nullable(),
+  /** 1-based source page if multi-page OCR blob */
+  pageNumber: z.number().int().positive().nullable(),
 });
 
 export const paperExtractSchema = z.object({
@@ -40,10 +59,19 @@ export type ExtractedQuestion = {
   index: number;
   section?: string;
   text: string;
-  options: { key: string; text: string }[];
+  options: {
+    key: string;
+    text: string;
+    hasImage?: boolean;
+    imageBbox?: { ymin: number; xmin: number; ymax: number; xmax: number };
+  }[];
   correctKey?: string;
   topic?: string;
   subtopic?: string;
+  hasFigure?: boolean;
+  figureBbox?: { ymin: number; xmin: number; ymax: number; xmax: number };
+  figureUncertain?: boolean;
+  pageNumber?: number;
 };
 
 function nullToUndef<T>(v: T | null | undefined): T | undefined {
@@ -59,10 +87,19 @@ function normalizeExtracted(raw: z.infer<typeof paperExtractSchema>): ExtractedP
       index: q.index,
       section: nullToUndef(q.section),
       text: q.text,
-      options: q.options,
+      options: q.options.map((o) => ({
+        key: o.key,
+        text: o.text,
+        hasImage: nullToUndef(o.hasImage) ?? undefined,
+        imageBbox: nullToUndef(o.imageBbox) ?? undefined,
+      })),
       correctKey: nullToUndef(q.correctKey),
       topic: nullToUndef(q.topic),
       subtopic: nullToUndef(q.subtopic),
+      hasFigure: nullToUndef(q.hasFigure) ?? undefined,
+      figureBbox: nullToUndef(q.figureBbox) ?? undefined,
+      figureUncertain: nullToUndef(q.figureUncertain) ?? undefined,
+      pageNumber: nullToUndef(q.pageNumber) ?? undefined,
     })),
   };
 }
@@ -94,6 +131,11 @@ Rules:
 - topic/subtopic null when unknown.
 - title/paperYear/durationMin null when unknown.
 - index is 1-based sequential order.
+- hasFigure=true if the question references a figure/graph/diagram/table-image; else false.
+- figureBbox: if hasFigure and a page image was provided, use Gemini-style normalized 0–1000 coords [ymin,xmin,ymax,xmax] relative to the full page; else null.
+- figureUncertain=true if bbox is a rough guess (e.g. text-only OCR without reliable image layout).
+- options[].hasImage / imageBbox similarly for option-only figures; usually null.
+- pageNumber: 1-based page if known from OCR markers; else null.
 
 OCR:
 ${opts.markdown.slice(0, 120_000)}`,

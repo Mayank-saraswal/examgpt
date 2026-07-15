@@ -26,10 +26,18 @@ export {
   validateExtractedQuestions,
   solveMissingAnswers,
   paperExtractSchema,
+  extractedQuestionSchema,
+  normalizedBBoxSchema,
   type ExtractedPaper,
   type ExtractedQuestion,
   type ValidatedQuestion,
 } from "./paper-extract";
+export {
+  normalizedBBoxToPixels,
+  isValidNormalizedBBox,
+  type NormalizedBBox,
+  type PixelRect,
+} from "./bbox";
 export {
   formatOptionChangeTrail,
   classifyQuestionStatus,

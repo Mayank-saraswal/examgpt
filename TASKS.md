@@ -437,14 +437,15 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - [ ] Live-verify: set `publicMetadata.role=admin` + `ADMIN_USER_IDS`; admin-upload one NEET PYQ → publish → start from Previous Year Papers → report. Record here.
 
 **Diagram support (prerequisite for platform PYQ quality):**
-- [ ] paper/extract: page → PNG; vision-extract returns per-Q figure flags + normalized bboxes; crop (sharp) → storage → `Question.imageKeys` / `options[].imageKey`; failed crop → `flagged` for review.
-- [ ] Exam + report UI render figures (web + mobile); missing → placeholder + report affordance.
-- [ ] Explanations: `imageKeys` → `explain-vision` with crop; else `explain`.
-- [ ] AI-generated papers: text-only v1 (UI copy).
-- [ ] Unit tests: bbox→pixel clamp; extract schema imageKeys; explain routing. Live-verify one diagram-heavy page.
+- [x] paper/extract: page → PNG (`@napi-rs/canvas` + pdfjs); vision-extract returns per-Q figure flags + normalized bboxes; crop (sharp) → storage → `Question.imageKeys` / `options[].imageKey`; failed crop → `flagged` for review.
+- [x] Exam + report UI render figures (web + mobile); missing → placeholder + report affordance.
+- [x] Explanations: `imageKeys` → `explain-vision` with crop; else `explain`.
+- [x] AI-generated papers: text-only v1 (UI copy on web + mobile Tests).
+- [x] Unit tests: bbox→pixel clamp; extract schema imageKeys; explain routing (`selectExplainTask`).
+  - **Live-verify:** re-run on a diagram-heavy PYQ page after stack stable (record attemptId + sample imageKeys here). Pending full NEET extract when OCR quota/API stable.
 
 **Model routing (registry):**
-- [ ] Tasks `explain` / `explain-vision`; defaults per §3 table; call-site moves; `compare-report-models.ts`; `Report.totalCostUsd` rollup + unit test.
+- [x] Tasks `explain` / `explain-vision`; defaults per §3 table; call-site moves; `compare-report-models.ts`; `Report.totalCostUsd` rollup + unit test (commit `76f2030`).
 
 ### Phase 8 — Deployment + release
 - [ ] Server: Dockerfile → Railway/Render/Fly (pick one, document); managed Postgres (Neon/Supabase-postgres); Qdrant Cloud; Inngest Cloud; R2 prod bucket; prod Clerk instance (incl. admin role setup).

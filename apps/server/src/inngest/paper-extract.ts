@@ -209,6 +209,107 @@ export const paperExtract = inngest.createFunction(
       return solveMissingAnswers({ questions: v, userId });
     });
 
+    /** Crop figures per question → imageKeys; failed crops flag question. */
+    const figureMeta = await step.run("crop-figures", async () => {
+      const meta: Record<
+        number,
+        { imageKeys: string[]; options: unknown; flaggedExtra: boolean }
+      > = {};
+      if (!test.paperDocumentId) return meta;
+
+      const doc = await db.document.findFirst({
+        where: { id: test.paperDocumentId, userId },
+      });
+      if (!doc?.fileKey) return meta;
+
+      let pageBytes: Awaited<ReturnType<typeof splitPdfPages>> = [];
+      try {
+        const bytes = await downloadDocumentBytes(doc.fileKey);
+        pageBytes = await splitPdfPages(bytes);
+      } catch (err) {
+        logger.warn({ err }, "crop-figures: split failed");
+        return meta;
+      }
+
+      const { renderPdfPageToPng } = await import("../pdf/render-page");
+      const { cropFigureFromPagePng } = await import("../pdf/crop-figure");
+      const { writeLocalObject } = await import("../storage/local");
+
+      for (const q of extracted.questions) {
+        const pageNum = q.pageNumber ?? 1;
+        const page = pageBytes.find((p) => p.pageNumber === pageNum) ?? pageBytes[0];
+        if (!page) continue;
+
+        let imageKeys: string[] = [];
+        let flaggedExtra = false;
+        const options = q.options.map((o) => ({ ...o }));
+
+        if (q.hasFigure) {
+          if (!q.figureBbox) {
+            flaggedExtra = true;
+            logger.warn(
+              { index: q.index },
+              "hasFigure without figureBbox — flagging for review",
+            );
+          } else {
+            try {
+              const rendered = await renderPdfPageToPng(page.bytes, 2);
+              const crop = await cropFigureFromPagePng(
+                rendered.png,
+                q.figureBbox,
+                { uncertain: q.figureUncertain },
+              );
+              if (crop.ok) {
+                const key = `users/${userId}/papers/${testId}/q${q.index}-fig.png`;
+                await writeLocalObject(key, crop.png);
+                imageKeys = [key];
+                if (crop.uncertain) flaggedExtra = true;
+              } else {
+                flaggedExtra = true;
+                logger.warn(
+                  { index: q.index, reason: crop.reason },
+                  "figure crop failed — flagging question",
+                );
+              }
+            } catch (err) {
+              flaggedExtra = true;
+              logger.warn({ err, index: q.index }, "figure crop error");
+            }
+          }
+        }
+
+        // Option-level crops
+        for (let i = 0; i < options.length; i++) {
+          const o = options[i]!;
+          if (!o.hasImage || !o.imageBbox) continue;
+          try {
+            const rendered = await renderPdfPageToPng(page.bytes, 2);
+            const crop = await cropFigureFromPagePng(rendered.png, o.imageBbox);
+            if (crop.ok) {
+              const key = `users/${userId}/papers/${testId}/q${q.index}-opt-${o.key}.png`;
+              await writeLocalObject(key, crop.png);
+              (options[i] as { imageKey?: string }).imageKey = key;
+            } else {
+              flaggedExtra = true;
+            }
+          } catch {
+            flaggedExtra = true;
+          }
+        }
+
+        meta[q.index] = {
+          imageKeys,
+          options: options.map((o) => ({
+            key: o.key,
+            text: o.text,
+            imageKey: (o as { imageKey?: string }).imageKey,
+          })),
+          flaggedExtra,
+        };
+      }
+      return meta;
+    });
+
     await step.run("persist-questions", async () => {
       await db.question.deleteMany({ where: { testId } });
       const scheme =
@@ -216,18 +317,20 @@ export const paperExtract = inngest.createFunction(
       const correctMarks = typeof scheme.correct === "number" ? scheme.correct : 4;
 
       for (const q of validated) {
+        const fig = figureMeta[q.index];
         await db.question.create({
           data: {
             testId,
             index: q.index,
             section: q.section,
             text: q.text,
-            options: q.options,
+            imageKeys: fig?.imageKeys ?? [],
+            options: (fig?.options ?? q.options) as object,
             correctKey: q.correctKey,
             answerConfidence: q.answerConfidence,
             topic: q.topic,
             subtopic: q.subtopic,
-            flagged: q.needsReview,
+            flagged: q.needsReview || Boolean(fig?.flaggedExtra),
           },
         });
       }
@@ -236,7 +339,10 @@ export const paperExtract = inngest.createFunction(
         .length * correctMarks;
 
       const anyLowConf = validated.some(
-        (q) => q.needsReview || (q.answerConfidence ?? 1) < 0.8,
+        (q) =>
+          q.needsReview ||
+          (q.answerConfidence ?? 1) < 0.8 ||
+          Boolean(figureMeta[q.index]?.flaggedExtra),
       );
 
       await db.test.update({
@@ -248,7 +354,7 @@ export const paperExtract = inngest.createFunction(
           paperYear: extracted.paperYear ?? test.paperYear,
           durationMin: extracted.durationMin ?? test.durationMin,
           failureReason: anyLowConf
-            ? "Some questions need review (low-confidence extraction/answers). Flag bad ones, then finish review."
+            ? "Some questions need review (low-confidence extraction/answers/figures). Flag bad ones, then finish review."
             : null,
         },
       });

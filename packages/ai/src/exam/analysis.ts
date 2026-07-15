@@ -19,6 +19,8 @@ export type QuestionAnalysisInput = {
   paletteState: string;
   /** Ordered option keys selected (from CHANGE/SELECT events) for trail text */
   optionTrail?: string[];
+  /** Cropped figure storage keys from extraction */
+  imageKeys?: string[];
 };
 
 export type TopicAnalysisRow = {
@@ -67,6 +69,8 @@ export type QuestionAnalysisRow = {
   }[];
   webSources?: { url: string; title: string }[];
   explanationSource?: "notes" | "web" | "model" | "none";
+  /** Cropped figure storage keys for exam/report rendering */
+  imageKeys?: string[];
 };
 
 function median(nums: number[]): number {
@@ -241,6 +245,7 @@ export function buildQuestionAnalysisRows(
       notesCitations: [],
       webSources: [],
       explanationSource: "none",
+      imageKeys: r.imageKeys ?? [],
     };
   });
 }

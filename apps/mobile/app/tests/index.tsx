@@ -98,6 +98,9 @@ export default function TestsScreen() {
         <Text className="mb-2 font-medium text-slate-900 dark:text-slate-50">
           Generate AI paper
         </Text>
+        <Text className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+          Text-only in v1 — AI papers do not include diagrams or figures.
+        </Text>
         <TextInput
           value={genTitle}
           onChangeText={setGenTitle}

@@ -373,10 +373,41 @@ export default function ExamPage() {
               <div className="mt-2">
                 <ChatMarkdown content={current.text} />
               </div>
+              {current.imageKeys?.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {current.imageKeys.map((key) => {
+                    const api =
+                      process.env.NEXT_PUBLIC_API_URL ??
+                      "http://localhost:4000";
+                    const src = `${api}/storage/local/${key
+                      .split("/")
+                      .map(encodeURIComponent)
+                      .join("/")}`;
+                    return (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={key}
+                        src={src}
+                        alt={`Figure for question ${current.index}`}
+                        className="max-h-64 w-auto max-w-full rounded-lg border border-[var(--eg-border)] bg-white object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).alt =
+                            "Figure unavailable — report this question";
+                          (e.target as HTMLImageElement).className +=
+                            " min-h-24 bg-[var(--eg-muted)]";
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
               <div className="mt-4 space-y-2">
                 {options.map((o) => {
                   const selected =
                     localPalette[current.index]?.selectedKey === o.key;
+                  const optImg = (o as { imageKey?: string }).imageKey;
+                  const api =
+                    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
                   return (
                     <label
                       key={o.key}
@@ -400,7 +431,20 @@ export default function ExamPage() {
                         }
                       />
                       <span className="font-medium">{o.key}.</span>
-                      <span>{o.text}</span>
+                      <span className="flex flex-col gap-1">
+                        <span>{o.text}</span>
+                        {optImg && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={`${api}/storage/local/${optImg
+                              .split("/")
+                              .map(encodeURIComponent)
+                              .join("/")}`}
+                            alt={`Option ${o.key} figure`}
+                            className="max-h-32 w-auto rounded border border-[var(--eg-border)] object-contain"
+                          />
+                        )}
+                      </span>
                     </label>
                   );
                 })}

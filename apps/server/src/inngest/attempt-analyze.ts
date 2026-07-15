@@ -241,6 +241,7 @@ export const attemptAnalyze = inngest.createFunction(
           optionChanges: r?.optionChanges ?? 0,
           paletteState: r?.paletteState ?? "NOT_VISITED",
           optionTrail: optionTrailFromEvents(events, q.index),
+          imageKeys: q.imageKeys ?? [],
         };
       });
       const topics = buildTopicAnalysis(inputs);
@@ -277,6 +278,18 @@ export const attemptAnalyze = inngest.createFunction(
         } catch (err) {
           logger.warn({ err }, "hybrid search for explain failed");
         }
+        let image:
+          | { data: Buffer; mediaType: "image/png" }
+          | undefined;
+        if (q.imageKeys?.length) {
+          try {
+            const { readLocalObject } = await import("../storage/local");
+            const buf = await readLocalObject(q.imageKeys[0]!);
+            if (buf) image = { data: buf, mediaType: "image/png" };
+          } catch (err) {
+            logger.warn({ err }, "load figure for explain-vision failed");
+          }
+        }
         const exp = await explainQuestion({
           userId,
           questionText: q.text,
@@ -284,6 +297,8 @@ export const attemptAnalyze = inngest.createFunction(
           correctKey: q.correctKey,
           selectedKey: target.selectedKey,
           chunks,
+          imageKeys: q.imageKeys ?? [],
+          image,
         });
         const idx = rows.findIndex(
           (r) => r.questionIndex === target.questionIndex,

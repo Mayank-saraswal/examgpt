@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   Text,
@@ -26,7 +27,16 @@ type QRow = {
     title: string;
     pageNumber: number;
   }[];
+  imageKeys?: string[];
 };
+
+function figureUrl(key: string): string {
+  const api = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
+  return `${api}/storage/local/${key
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")}`;
+}
 
 type TopicRow = {
   topic: string;
@@ -233,6 +243,19 @@ export default function MobileReportScreen() {
                       {q.confusionNote}
                     </Text>
                   ) : null}
+                  {q.imageKeys?.map((key) => (
+                    <View key={key} className="mb-2 overflow-hidden rounded-lg border border-zinc-200">
+                      <Image
+                        source={{ uri: figureUrl(key) }}
+                        style={{ width: "100%", height: 160 }}
+                        resizeMode="contain"
+                        accessibilityLabel={`Figure for Q${q.questionIndex + 1}`}
+                      />
+                      <Text className="px-2 py-1 text-xs text-zinc-400">
+                        If missing, report this question.
+                      </Text>
+                    </View>
+                  ))}
                   <Text className="text-sm text-zinc-700 dark:text-zinc-200">
                     {q.explanation ?? "No explanation."}
                   </Text>

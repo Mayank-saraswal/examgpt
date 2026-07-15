@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
+  Image,
   Pressable,
   ScrollView,
   Text,
@@ -247,8 +248,36 @@ export default function MobileExamScreen() {
           <>
             <Text className="text-xs text-slate-500">Q{current.index}</Text>
             <Markdown>{current.text}</Markdown>
+            {current.imageKeys?.length > 0 &&
+              current.imageKeys.map((key) => {
+                const api =
+                  process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
+                const src = `${api}/storage/local/${key
+                  .split("/")
+                  .map(encodeURIComponent)
+                  .join("/")}`;
+                return (
+                  <View
+                    key={key}
+                    className="my-2 overflow-hidden rounded-lg border border-slate-200"
+                  >
+                    <Image
+                      source={{ uri: src }}
+                      style={{ width: "100%", height: 180 }}
+                      resizeMode="contain"
+                      accessibilityLabel={`Figure for question ${current.index}`}
+                    />
+                    <Text className="px-2 py-1 text-xs text-slate-400">
+                      If the figure fails to load, report this question.
+                    </Text>
+                  </View>
+                );
+              })}
             {options.map((o) => {
               const sel = palette[current.index]?.selectedKey === o.key;
+              const optImg = (o as { imageKey?: string }).imageKey;
+              const api =
+                process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
               return (
                 <Pressable
                   key={o.key}
@@ -262,6 +291,19 @@ export default function MobileExamScreen() {
                   <Text>
                     {o.key}. {o.text}
                   </Text>
+                  {optImg ? (
+                    <Image
+                      source={{
+                        uri: `${api}/storage/local/${optImg
+                          .split("/")
+                          .map(encodeURIComponent)
+                          .join("/")}`,
+                      }}
+                      style={{ width: "100%", height: 100, marginTop: 6 }}
+                      resizeMode="contain"
+                      accessibilityLabel={`Option ${o.key} figure`}
+                    />
+                  ) : null}
                 </Pressable>
               );
             })}

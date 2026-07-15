@@ -47,7 +47,16 @@ type QRow = {
   webSources?: { url: string; title: string }[];
   explanationSource?: string;
   topic?: string | null;
+  imageKeys?: string[];
 };
+
+function figureUrl(key: string): string {
+  const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  return `${api}/storage/local/${key
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")}`;
+}
 
 type TopicRow = {
   topic: string;
@@ -473,6 +482,26 @@ export default function ReportPage() {
                           {q.confusionNote}
                         </p>
                       )}
+                      {q.imageKeys && q.imageKeys.length > 0 ? (
+                        <div className="mb-2 space-y-2">
+                          {q.imageKeys.map((key) => (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              key={key}
+                              src={figureUrl(key)}
+                              alt={`Figure for Q${q.questionIndex + 1}`}
+                              className="max-h-48 w-auto max-w-full rounded-md border border-[var(--eg-border)] bg-white object-contain"
+                              onError={(e) => {
+                                const el = e.target as HTMLImageElement;
+                                el.alt =
+                                  "Figure unavailable — report this question";
+                                el.className +=
+                                  " min-h-20 bg-[var(--eg-muted)]";
+                              }}
+                            />
+                          ))}
+                        </div>
+                      ) : null}
                       {q.explanation ? (
                         <p className="leading-relaxed">{q.explanation}</p>
                       ) : (

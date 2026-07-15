@@ -96,7 +96,7 @@ export default function TestsPage() {
 
       <section className="rounded-xl border border-[var(--eg-border)] p-4">
         <h2 className="flex items-center gap-2 font-medium">
-          <Upload className="size-4" /> Upload previous year paper
+          <Upload className="size-4" aria-hidden /> Upload previous year paper
         </h2>
         <p className="mt-1 text-sm text-[var(--eg-muted-fg)]">
           Pick a document from your library (upload a PAPER PDF first in Library).
@@ -149,7 +149,11 @@ export default function TestsPage() {
         </h2>
         <p className="mt-1 text-sm text-[var(--eg-muted-fg)]">
           Adaptive practice: Auto mode weights weak topics (~50%) from your last
-          reports and grounds questions in your notes.
+          reports and grounds questions in your notes.{" "}
+          <span className="font-medium text-[var(--eg-fg)]">
+            Text-only in v1
+          </span>{" "}
+          — AI-generated papers do not include diagrams or figures.
         </p>
         <div className="mt-3 flex flex-col gap-3">
           <Input
