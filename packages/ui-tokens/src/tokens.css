@@ -3,7 +3,8 @@
  * - Primary: blue (#2563eb family)
  * - Neutrals: slate
  * - Semantic: green / red / amber
- * - NO purple / violet / indigo
+ * - NO purple / violet / indigo in general UI
+ * - Scoped exception: exam.* NTA purple for review states (portal only)
  */
 
 :root {
@@ -50,12 +51,39 @@
   --eg-primary: var(--eg-primary-600);
   --eg-primary-fg: #ffffff;
 
-  /* Exam palette (NTA-style; amber instead of purple for marked) */
-  --eg-palette-not-visited: var(--eg-slate-400);
-  --eg-palette-not-answered: #dc2626;
-  --eg-palette-answered: #16a34a;
-  --eg-palette-marked: #d97706;
-  --eg-palette-answered-marked: #d97706;
+  /*
+   * exam.* — authentic NTA CBT colors (Phase 7.6).
+   * Only used inside exam portal + report palette chips.
+   * Purple is intentional here; do not reuse on non-exam screens.
+   */
+  --exam-answered: #22c55e;
+  --exam-answered-fg: #ffffff;
+  --exam-not-answered: #ef4444;
+  --exam-not-answered-fg: #ffffff;
+  --exam-not-visited: #e5e7eb;
+  --exam-not-visited-border: #9ca3af;
+  --exam-not-visited-fg: #374151;
+  --exam-marked: #7c3aed;
+  --exam-marked-fg: #ffffff;
+  --exam-marked-dot: #22c55e;
+  --exam-action: #2563eb;
+  --exam-action-fg: #ffffff;
+  --exam-submit: #22c55e;
+  --exam-submit-fg: #ffffff;
+  --exam-bg: #ffffff;
+  --exam-fg: #111827;
+  --exam-muted-fg: #6b7280;
+  --exam-border: #e5e7eb;
+  --exam-heading: #2563eb;
+  --exam-surface: #ffffff;
+  --exam-panel: #fafafa;
+
+  /* Legacy aliases (map to exam tokens; prefer exam.* in new code) */
+  --eg-palette-not-visited: var(--exam-not-visited-border);
+  --eg-palette-not-answered: var(--exam-not-answered);
+  --eg-palette-answered: var(--exam-answered);
+  --eg-palette-marked: var(--exam-marked);
+  --eg-palette-answered-marked: var(--exam-marked);
 }
 
 .dark {
@@ -67,4 +95,21 @@
   --eg-ring: var(--eg-primary-400);
   --eg-primary: var(--eg-primary-500);
   --eg-primary-fg: #ffffff;
+  /* exam.* stay light-NTA even in dark app chrome */
+}
+
+/**
+ * Force light NTA surfaces for the exam shell (instructions + CBT window).
+ * Apply on the root exam container; children inherit light tokens.
+ */
+.exam-portal {
+  color-scheme: light;
+  background: var(--exam-bg);
+  color: var(--exam-fg);
+  --eg-bg: var(--exam-bg);
+  --eg-fg: var(--exam-fg);
+  --eg-muted-fg: var(--exam-muted-fg);
+  --eg-border: var(--exam-border);
+  --eg-primary: var(--exam-action);
+  --eg-primary-fg: var(--exam-action-fg);
 }
