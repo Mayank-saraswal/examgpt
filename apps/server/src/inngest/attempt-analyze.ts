@@ -22,6 +22,7 @@ import { inngest } from "./client";
 import { logger } from "../logger";
 import { hybridSearchStudyChunks } from "../qdrant/search";
 import { sendPushToUser } from "../push";
+import { updateQuestionBankCorrectnessFromResponses } from "../qdrant/question-bank";
 
 /**
  * attempt/analyze — post-submit report pipeline (Phase 5).
@@ -397,6 +398,22 @@ export const attemptAnalyze = inngest.createFunction(
         where: { id: attemptId },
         data: { status: "ANALYZED" },
       });
+    });
+
+    await step.run("question-bank-wasCorrect", async () => {
+      try {
+        const n = await updateQuestionBankCorrectnessFromResponses({
+          testId: attempt.testId,
+          responses: scoredResponses.rows.map((r) => ({
+            questionIndex: r.questionIndex,
+            isCorrect: r.isCorrect ?? null,
+          })),
+        });
+        return { updated: n };
+      } catch (err) {
+        logger.warn({ err }, "question_bank wasCorrect batch failed");
+        return { updated: 0 };
+      }
     });
 
     await step.run("mem0-writeback", async () => {

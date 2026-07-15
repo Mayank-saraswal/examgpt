@@ -12,6 +12,10 @@ import { sendPushToUser } from "../push";
 import { downloadDocumentBytes } from "../storage/download";
 import { ocrPage } from "@examgpt/ai";
 import { splitPdfPages } from "../pdf/split";
+import {
+  ensureQuestionBankCollection,
+  upsertQuestionBankItems,
+} from "../qdrant/question-bank";
 
 const threshold = () => env.PAPER_SYLLABUS_MATCH_THRESHOLD;
 
@@ -238,6 +242,31 @@ export const paperExtract = inngest.createFunction(
             : null,
         },
       });
+    });
+
+    await step.run("question-bank-upsert", async () => {
+      try {
+        await ensureQuestionBankCollection();
+        const qs = await db.question.findMany({
+          where: { testId },
+          orderBy: { index: "asc" },
+        });
+        if (qs.length === 0) return { n: 0 };
+        const n = await upsertQuestionBankItems(
+          qs.map((q) => ({
+            userId,
+            testId,
+            questionIndex: q.index,
+            topic: q.topic ?? q.section ?? "Untagged",
+            text: q.text,
+            wasCorrect: null,
+          })),
+        );
+        return { n };
+      } catch (err) {
+        logger.warn({ err, testId }, "question_bank upsert after extract failed");
+        return { n: 0 };
+      }
     });
 
     await step.run("notify-ready", async () => {
