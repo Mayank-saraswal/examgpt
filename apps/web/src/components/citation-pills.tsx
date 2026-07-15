@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { BookOpen, ExternalLink } from "lucide-react";
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 
 export type PillCitation = {
   documentId: string;
@@ -21,33 +22,46 @@ export function CitationPills({
   citations?: PillCitation[] | null;
   webSources?: PillWebSource[] | null;
 }) {
-  if ((!citations || citations.length === 0) && (!webSources || webSources.length === 0)) {
+  if (
+    (!citations || citations.length === 0) &&
+    (!webSources || webSources.length === 0)
+  ) {
     return null;
   }
 
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
+    <div className="mt-2 flex flex-col gap-1.5">
       {citations?.map((c) => (
-        <Link
-          key={`${c.documentId}-${c.pageNumber}`}
-          href={`/library/${c.documentId}?page=${c.pageNumber}`}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[var(--eg-border)] bg-[var(--eg-surface)] px-2.5 py-1 text-xs font-medium text-[var(--eg-primary)] hover:bg-slate-50 dark:hover:bg-slate-900"
-        >
-          <BookOpen className="size-3.5" aria-hidden />
-          {c.title}, p. {c.pageNumber}
-        </Link>
+        <Marker key={`${c.documentId}-${c.pageNumber}`} className="w-auto">
+          <MarkerIcon>
+            <BookOpen className="size-3.5 text-[var(--eg-primary)]" />
+          </MarkerIcon>
+          <MarkerContent>
+            <Link
+              href={`/library/${c.documentId}?page=${c.pageNumber}`}
+              className="font-medium text-[var(--eg-primary)] no-underline hover:underline"
+            >
+              {c.title}, p. {c.pageNumber}
+            </Link>
+          </MarkerContent>
+        </Marker>
       ))}
       {webSources?.map((w) => (
-        <a
-          key={w.url}
-          href={w.url}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100"
-        >
-          <ExternalLink className="size-3.5" aria-hidden />
-          Web: {w.title}
-        </a>
+        <Marker key={w.url} className="w-auto text-amber-800 dark:text-amber-200">
+          <MarkerIcon>
+            <ExternalLink className="size-3.5" />
+          </MarkerIcon>
+          <MarkerContent>
+            <a
+              href={w.url}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium no-underline hover:underline"
+            >
+              From the web: {w.title}
+            </a>
+          </MarkerContent>
+        </Marker>
       ))}
     </div>
   );

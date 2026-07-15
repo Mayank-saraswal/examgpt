@@ -270,19 +270,19 @@ export default function ChatThreadScreen() {
           <View
             className={
               item.role === "USER"
-                ? "ml-8 rounded-2xl bg-primary-600 px-3 py-2"
-                : "mr-8 rounded-2xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900"
+                ? "ml-10 max-w-[85%] self-end rounded-3xl bg-primary-600 px-3.5 py-2.5"
+                : "mr-10 max-w-[85%] self-start rounded-3xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 dark:border-slate-700 dark:bg-slate-900"
             }
           >
             {item.role === "ASSISTANT" && item.kind === "web" ? (
-              <Text className="mb-1 text-xs font-semibold uppercase text-amber-700">
+              <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-700">
                 From the web · not your notes
               </Text>
             ) : null}
             {item.role === "ASSISTANT" ? (
               <Markdown>{item.content || "…"}</Markdown>
             ) : (
-              <Text className="text-sm text-white">{item.content}</Text>
+              <Text className="text-sm leading-5 text-white">{item.content}</Text>
             )}
             {item.citations?.map((c) => (
               <Pressable
@@ -290,16 +290,19 @@ export default function ChatThreadScreen() {
                 onPress={() =>
                   router.push(`/library/${c.documentId}?page=${c.pageNumber}`)
                 }
-                className="mt-2 self-start rounded-full border border-primary-200 bg-primary-50 px-2 py-1"
+                className="mt-2 flex-row items-center self-start rounded-full border border-primary-200 bg-white px-2.5 py-1 dark:bg-slate-800"
               >
-                <Text className="text-xs text-primary-700">
+                <Text className="text-xs font-medium text-primary-700">
                   {c.title}, p. {c.pageNumber}
                 </Text>
               </Pressable>
             ))}
             {item.webSources?.map((w) => (
-              <Text key={w.url} className="mt-1 text-xs text-amber-800">
-                Web: {w.title}
+              <Text
+                key={w.url}
+                className="mt-1 text-xs font-medium text-amber-800 dark:text-amber-200"
+              >
+                From the web: {w.title}
               </Text>
             ))}
           </View>

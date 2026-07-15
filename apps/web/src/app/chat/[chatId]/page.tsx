@@ -4,8 +4,8 @@ import { useAuth } from "@clerk/nextjs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Loader2, Send, Globe } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { ArrowLeft, Loader2, Send, Globe, Paperclip } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,26 @@ import {
   type PillCitation,
   type PillWebSource,
 } from "@/components/citation-pills";
+import {
+  Message,
+  MessageContent,
+  MessageHeader,
+} from "@/components/ui/message";
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
+import {
+  MessageScrollerProvider,
+  MessageScroller,
+  MessageScrollerViewport,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerButton,
+} from "@/components/ui/message-scroller";
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import {
+  Attachment,
+  AttachmentContent,
+  AttachmentMedia,
+} from "@/components/ui/attachment";
 import { streamChatMessage } from "@/lib/chat-stream";
 import { cn } from "@/lib/utils";
 
@@ -47,7 +67,6 @@ export default function ChatThreadPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [offerWeb, setOfferWeb] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   const chat = useQuery({
     ...trpc.chat.get.queryOptions({ id: chatId }),
@@ -158,37 +177,63 @@ export default function ChatThreadPage() {
         </div>
       </header>
 
-      <div className="flex-1 space-y-4 overflow-y-auto py-4">
-        {local.map((m) => (
-          <div
-            key={m.id}
-            className={cn(
-              "max-w-[90%] rounded-2xl px-4 py-3",
-              m.role === "USER"
-                ? "ml-auto bg-[var(--eg-primary)] text-white"
-                : "mr-auto border border-[var(--eg-border)] bg-[var(--eg-surface)]",
-            )}
-          >
-            {m.role === "ASSISTANT" && m.kind === "web" && (
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                From the web · not your notes
-              </p>
-            )}
-            {m.role === "ASSISTANT" ? (
-              <ChatMarkdown content={m.content || (m.streaming ? "…" : "")} />
-            ) : (
-              <p className="text-sm whitespace-pre-wrap">{m.content}</p>
-            )}
-            {m.role === "ASSISTANT" && (
-              <CitationPills
-                citations={m.citations}
-                webSources={m.webSources}
-              />
-            )}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
+      <MessageScrollerProvider>
+        <MessageScroller className="min-h-0 flex-1">
+          <MessageScrollerViewport>
+            <MessageScrollerContent className="gap-4 py-4">
+              {local.map((m, i) => {
+                const isUser = m.role === "USER";
+                const isLast = i === local.length - 1;
+                return (
+                  <MessageScrollerItem key={m.id} scrollAnchor={isLast}>
+                    <Message align={isUser ? "end" : "start"}>
+                      <MessageContent>
+                        {m.role === "ASSISTANT" && m.kind === "web" && (
+                          <MessageHeader>
+                            <Marker className="text-amber-700 dark:text-amber-300">
+                              <MarkerIcon>
+                                <Globe className="size-3.5" />
+                              </MarkerIcon>
+                              <MarkerContent>
+                                From the web · not your notes
+                              </MarkerContent>
+                            </Marker>
+                          </MessageHeader>
+                        )}
+                        <Bubble
+                          variant={isUser ? "default" : "outline"}
+                          align={isUser ? "end" : "start"}
+                        >
+                          <BubbleContent>
+                            {m.role === "ASSISTANT" ? (
+                              <ChatMarkdown
+                                content={
+                                  m.content || (m.streaming ? "…" : "")
+                                }
+                              />
+                            ) : (
+                              <p className="text-sm whitespace-pre-wrap">
+                                {m.content}
+                              </p>
+                            )}
+                          </BubbleContent>
+                        </Bubble>
+                        {m.role === "ASSISTANT" && (
+                          <CitationPills
+                            citations={m.citations}
+                            webSources={m.webSources}
+                          />
+                        )}
+                      </MessageContent>
+                    </Message>
+                  </MessageScrollerItem>
+                );
+              })}
+            </MessageScrollerContent>
+          </MessageScrollerViewport>
+          <MessageScrollerButton direction="end" />
+        </MessageScroller>
+      </MessageScrollerProvider>
 
       {error && (
         <p className="mb-2 text-sm text-red-600" role="alert">
@@ -218,31 +263,53 @@ export default function ChatThreadPage() {
       )}
 
       <form
-        className="flex gap-2 border-t border-[var(--eg-border)] pt-3"
+        className="flex flex-col gap-2 border-t border-[var(--eg-border)] pt-3"
         onSubmit={(e) => {
           e.preventDefault();
           void send(false);
         }}
       >
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask from your notes…"
-          disabled={!isSignedIn || busy}
-          className="flex-1"
-        />
-        <button
-          type="submit"
-          disabled={!isSignedIn || busy || !input.trim()}
-          className={cn(buttonVariants({ variant: "default" }), "gap-1")}
+        <Attachment
+          state="idle"
+          size="sm"
+          className="w-full border-dashed"
         >
-          {busy ? (
-            <Loader2 className="size-4 animate-spin" />
-          ) : (
-            <Send className="size-4" />
-          )}
-          Send
-        </button>
+          <AttachmentMedia>
+            <Paperclip className="size-4 text-[var(--eg-muted-fg)]" />
+          </AttachmentMedia>
+          <AttachmentContent>
+            <p className="text-xs text-[var(--eg-muted-fg)]">
+              Upload notes in Library — chat answers only from your files
+            </p>
+            <Link
+              href="/library"
+              className="text-xs font-medium text-[var(--eg-primary)] hover:underline"
+            >
+              Open library
+            </Link>
+          </AttachmentContent>
+        </Attachment>
+        <div className="flex gap-2">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask from your notes…"
+            disabled={!isSignedIn || busy}
+            className="flex-1"
+          />
+          <button
+            type="submit"
+            disabled={!isSignedIn || busy || !input.trim()}
+            className={cn(buttonVariants({ variant: "default" }), "gap-1")}
+          >
+            {busy ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Send className="size-4" />
+            )}
+            Send
+          </button>
+        </div>
       </form>
     </div>
   );
