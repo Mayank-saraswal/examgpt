@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import "../global.css";
 import { colors } from "@examgpt/ui-tokens";
 import { queryClient, setAuthTokenGetter } from "../src/trpc";
+import { initMobileSentry } from "../src/sentry";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
 
@@ -14,6 +15,7 @@ function AuthTokenBridge({ children }: { children: React.ReactNode }) {
   const { getToken } = useAuth();
   useEffect(() => {
     setAuthTokenGetter(() => getToken());
+    initMobileSentry();
   }, [getToken]);
   return <>{children}</>;
 }

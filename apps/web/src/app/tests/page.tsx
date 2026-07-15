@@ -8,6 +8,7 @@ import { Loader2, FlaskConical, Sparkles, Upload } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
 import { cn } from "@/lib/utils";
 
 export default function TestsPage() {
@@ -301,6 +302,14 @@ export default function TestsPage() {
         </div>
       </section>
 
+      {list.isLoading && <LoadingState label="Loading tests…" />}
+      {list.isError && (
+        <ErrorState
+          title="Could not load tests"
+          description={list.error.message}
+          onRetry={() => void list.refetch()}
+        />
+      )}
       <ul className="flex flex-col gap-2">
         {list.data?.map((t) => (
           <li key={t.id}>
@@ -322,13 +331,23 @@ export default function TestsPage() {
                   : ""}
               </p>
               {t.failureReason && (
-                <p className="mt-1 text-xs text-amber-700">{t.failureReason}</p>
+                <p className="mt-1 text-xs text-amber-700" role="alert">
+                  {t.failureReason}
+                  {t.status === "FAILED" && (
+                    <span className="mt-1 block text-[var(--eg-muted-fg)]">
+                      Retry by creating a new paper from the form above.
+                    </span>
+                  )}
+                </p>
               )}
             </Link>
           </li>
         ))}
-        {list.data?.length === 0 && (
-          <p className="text-sm text-[var(--eg-muted-fg)]">No tests yet.</p>
+        {!list.isLoading && !list.isError && list.data?.length === 0 && (
+          <EmptyState
+            title="No tests yet"
+            description="Upload a previous-year paper or generate an adaptive practice paper."
+          />
         )}
       </ul>
     </div>

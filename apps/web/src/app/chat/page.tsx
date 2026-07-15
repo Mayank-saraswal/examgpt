@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { MessageSquarePlus, Loader2 } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
 import { buttonVariants } from "@/components/ui/button";
+import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
 import { cn } from "@/lib/utils";
 
 export default function ChatListPage() {
@@ -68,16 +69,32 @@ export default function ChatListPage() {
         </p>
       )}
 
-      {isSignedIn && list.isLoading && (
-        <p className="text-sm text-[var(--eg-muted-fg)]">Loading chats…</p>
+      {isSignedIn && list.isLoading && <LoadingState label="Loading chats…" />}
+
+      {isSignedIn && list.isError && (
+        <ErrorState
+          title="Could not load chats"
+          description={list.error.message}
+          onRetry={() => void list.refetch()}
+        />
       )}
 
-      {isSignedIn && list.data?.length === 0 && (
-        <div className="rounded-xl border border-dashed border-[var(--eg-border)] p-8 text-center">
-          <p className="text-sm text-[var(--eg-muted-fg)]">
-            No chats yet. Start one — answers cite pages from your uploaded notes.
-          </p>
-        </div>
+      {isSignedIn && !list.isLoading && !list.isError && list.data?.length === 0 && (
+        <EmptyState
+          title="No chats yet"
+          description="Start one — answers cite pages from your uploaded notes."
+          action={
+            <button
+              type="button"
+              disabled={create.isPending}
+              onClick={() => create.mutate({})}
+              className={cn(buttonVariants({ variant: "default" }), "gap-1.5")}
+            >
+              <MessageSquarePlus className="size-4" aria-hidden />
+              New chat
+            </button>
+          }
+        />
       )}
 
       <ul className="flex flex-col gap-2">

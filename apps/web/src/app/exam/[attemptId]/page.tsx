@@ -332,8 +332,11 @@ export default function ExamPage() {
         <header className="flex items-center justify-between border-b border-[var(--eg-border)] px-4 py-2">
           <p className="truncate text-sm font-medium">{state.data.test.title}</p>
           <p
+            role="timer"
+            aria-live="polite"
+            aria-label={`Time remaining ${formatMs(remainingMs)}`}
             className={cn(
-              "font-mono text-lg font-semibold tabular-nums",
+              "min-h-11 min-w-11 font-mono text-lg font-semibold tabular-nums",
               remainingMs < 60_000 ? "text-red-600" : "text-[var(--eg-fg)]",
             )}
           >
@@ -406,36 +409,53 @@ export default function ExamPage() {
           )}
         </main>
 
-        <footer className="flex flex-wrap gap-2 border-t border-[var(--eg-border)] p-3">
+        <footer
+          className="flex flex-wrap gap-2 border-t border-[var(--eg-border)] p-3"
+          role="toolbar"
+          aria-label="Exam navigation"
+        >
           <button
             type="button"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            aria-label="Previous question"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "min-h-11 min-w-11",
+            )}
             disabled={idx <= 1}
             onClick={() => goTo(idx - 1)}
           >
-            <ChevronLeft className="size-4" /> Prev
+            <ChevronLeft className="size-4" aria-hidden /> Prev
           </button>
           <button
             type="button"
-            className={cn(buttonVariants({ size: "sm" }))}
+            aria-label="Save answer and go to next question"
+            className={cn(buttonVariants({ size: "sm" }), "min-h-11")}
             onClick={() => {
               pushEvent(idx, "SAVE_NEXT");
               const next = questions.find((q) => q.index > idx);
               if (next) goTo(next.index);
             }}
           >
-            SAVE &amp; NEXT <ChevronRight className="size-4" />
+            SAVE &amp; NEXT <ChevronRight className="size-4" aria-hidden />
           </button>
           <button
             type="button"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            aria-label="Clear selected option"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "min-h-11",
+            )}
             onClick={() => pushEvent(idx, "CLEAR")}
           >
-            <Eraser className="size-4" /> CLEAR
+            <Eraser className="size-4" aria-hidden /> CLEAR
           </button>
           <button
             type="button"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            aria-label="Save answer, mark for review, and go next"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "min-h-11",
+            )}
             onClick={() => {
               pushEvent(idx, "MARK_REVIEW");
               pushEvent(idx, "SAVE_NEXT");
@@ -443,11 +463,15 @@ export default function ExamPage() {
               if (next) goTo(next.index);
             }}
           >
-            <Flag className="size-4" /> SAVE &amp; MARK
+            <Flag className="size-4" aria-hidden /> SAVE &amp; MARK
           </button>
           <button
             type="button"
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            aria-label="Mark for review and go next"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "min-h-11",
+            )}
             onClick={() => {
               pushEvent(idx, "MARK_REVIEW");
               const next = questions.find((q) => q.index > idx);
@@ -458,7 +482,11 @@ export default function ExamPage() {
           </button>
           <button
             type="button"
-            className={cn(buttonVariants({ variant: "destructive", size: "sm" }), "ml-auto")}
+            aria-label="Submit test"
+            className={cn(
+              buttonVariants({ variant: "destructive", size: "sm" }),
+              "ml-auto min-h-11",
+            )}
             onClick={() => setConfirmSubmit(true)}
           >
             Submit
@@ -467,11 +495,14 @@ export default function ExamPage() {
       </div>
 
       {/* Palette */}
-      <aside className="border-t border-[var(--eg-border)] p-3 lg:w-64 lg:border-l lg:border-t-0">
+      <aside
+        className="border-t border-[var(--eg-border)] p-3 lg:w-64 lg:border-l lg:border-t-0"
+        aria-label="Question palette"
+      >
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--eg-muted-fg)]">
           Palette
         </p>
-        <div className="grid grid-cols-5 gap-1.5">
+        <div className="grid grid-cols-5 gap-1.5" role="list">
           {questions.map((q) => {
             const st =
               localPalette[q.index]?.paletteState ?? ("NOT_VISITED" as PaletteState);
@@ -479,16 +510,22 @@ export default function ExamPage() {
               <button
                 key={q.index}
                 type="button"
+                role="listitem"
+                aria-label={`Question ${q.index}, status ${st.replaceAll("_", " ").toLowerCase()}${q.index === idx ? ", current" : ""}`}
+                aria-current={q.index === idx ? "true" : undefined}
                 onClick={() => goTo(q.index)}
                 className={cn(
-                  "relative flex size-9 items-center justify-center rounded text-xs font-semibold",
+                  "relative flex size-11 min-h-11 min-w-11 items-center justify-center rounded text-xs font-semibold",
                   PALETTE_STYLES[st],
                   q.index === idx && "ring-2 ring-[var(--eg-primary)]",
                 )}
               >
                 {q.index}
                 {st === "ANSWERED_MARKED" && (
-                  <span className="absolute bottom-0.5 right-0.5 size-1.5 rounded-full bg-green-600" />
+                  <span
+                    className="absolute bottom-0.5 right-0.5 size-1.5 rounded-full bg-green-600"
+                    aria-hidden
+                  />
                 )}
               </button>
             );

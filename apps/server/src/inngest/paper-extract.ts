@@ -93,13 +93,12 @@ export const paperExtract = inngest.createFunction(
       if (!doc.fileKey) throw new Error("Document has no file");
       const bytes = await downloadDocumentBytes(doc.fileKey);
       const pages = await splitPdfPages(bytes);
-      // Credit guard: PAPER_EXTRACT_MAX_PAGES (default 8). Full papers can be huge.
+      // Credit guard: PAPER_EXTRACT_MAX_PAGES (default 8, hard max 100).
+      // Set high (e.g. 80) for full-paper live verify; omit to stay cheap.
+      const requested = Number(process.env.PAPER_EXTRACT_MAX_PAGES ?? 8);
       const maxPages = Math.max(
         1,
-        Math.min(
-          40,
-          Number(process.env.PAPER_EXTRACT_MAX_PAGES ?? 8) || 8,
-        ),
+        Math.min(100, Number.isFinite(requested) && requested > 0 ? requested : 8),
       );
       const mds: string[] = [];
       logger.info(

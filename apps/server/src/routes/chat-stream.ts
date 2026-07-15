@@ -137,13 +137,22 @@ export async function chatStreamHandler(req: Request, res: Response) {
       userId,
       query: message,
       forceWeb: forceWeb ?? false,
-      search: async ({ userId: uid, query, hydePassage, topK }) =>
-        hybridSearchStudyChunks({
-          userId: uid,
-          query,
-          hydePassage,
-          topK,
-        }),
+      search: async ({ userId: uid, query, hydePassage, topK }) => {
+        try {
+          return await hybridSearchStudyChunks({
+            userId: uid,
+            query,
+            hydePassage,
+            topK,
+          });
+        } catch (err) {
+          // Phase 7 chaos: Qdrant down → degrade with clear message, never crash stream
+          logger.error({ err }, "Qdrant search failed — chat degraded");
+          throw new Error(
+            "Search is temporarily unavailable (knowledge index offline). Try again in a moment, or ask a general question after notes recovery.",
+          );
+        }
+      },
       onToken: (delta) => {
         streamed += delta;
         writeSse(res, "token", { delta });
@@ -209,10 +218,14 @@ export async function chatStreamHandler(req: Request, res: Response) {
     res.end();
   } catch (err) {
     logger.error({ err }, "chat stream failed");
+    const msg = err instanceof Error ? err.message : "Chat failed";
+    // Friendly copy when Postgres is down mid-request
+    const friendly =
+      /connect|ECONNREFUSED|Prisma|database/i.test(msg)
+        ? "Service temporarily unavailable (database). Please retry shortly."
+        : msg;
     try {
-      writeSse(res, "error", {
-        message: err instanceof Error ? err.message : "Chat failed",
-      });
+      writeSse(res, "error", { message: friendly });
     } catch {
       /* response may be closed */
     }

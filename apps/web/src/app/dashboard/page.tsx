@@ -15,6 +15,7 @@ import {
 import { useTRPC } from "@/trpc/client";
 import { buttonVariants } from "@/components/ui/button";
 import { HealthStatus } from "@/components/health-status";
+import { EmptyState, ErrorState, LoadingState } from "@/components/async-state";
 import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
@@ -54,20 +55,35 @@ export default function DashboardPage() {
         )}
       </header>
 
-      {!isLoaded && (
-        <p className="text-sm text-[var(--eg-muted-fg)]">Loading…</p>
-      )}
+      {!isLoaded && <LoadingState label="Loading session…" />}
 
       {isLoaded && !isSignedIn && (
-        <p className="text-sm text-[var(--eg-muted-fg)]">
-          Sign in with Google or email + password to continue.
-        </p>
+        <EmptyState
+          title="Sign in to continue"
+          description="Use Google or email + password. No phone/SMS."
+          action={
+            <Link
+              href="/sign-in"
+              className={cn(buttonVariants({ variant: "default" }))}
+            >
+              Sign in
+            </Link>
+          }
+        />
+      )}
+
+      {isSignedIn && me.isError && (
+        <ErrorState
+          title="Could not load profile"
+          description={me.error.message}
+          onRetry={() => void me.refetch()}
+        />
       )}
 
       {isSignedIn && (
         <>
           {me.isLoading ? (
-            <p className="text-sm text-[var(--eg-muted-fg)]">Loading profile…</p>
+            <LoadingState label="Loading profile…" />
           ) : (
             <div className="rounded-xl border border-[var(--eg-border)] p-5">
               <p className="font-medium">{me.data?.name ?? "Student"}</p>
@@ -132,13 +148,31 @@ export default function DashboardPage() {
             </div>
           )}
 
+          {dash.isLoading && <LoadingState label="Loading performance…" />}
+          {dash.isError && (
+            <ErrorState
+              title="Could not load performance"
+              description={dash.error.message}
+              onRetry={() => void dash.refetch()}
+            />
+          )}
           {dash.data && (
             <section className="rounded-xl border border-[var(--eg-border)] p-5">
               <h2 className="text-lg font-semibold">Performance</h2>
               {dash.data.scoreTrend.length === 0 ? (
-                <p className="mt-2 text-sm text-[var(--eg-muted-fg)]">
-                  Complete a mock test to see your score trend and weak topics.
-                </p>
+                <EmptyState
+                  className="mt-4 border-0 p-6"
+                  title="No attempts yet"
+                  description="Complete a mock test to see your score trend and weak topics."
+                  action={
+                    <Link
+                      href="/tests"
+                      className={cn(buttonVariants({ variant: "default" }))}
+                    >
+                      Go to tests
+                    </Link>
+                  }
+                />
               ) : (
                 <>
                   <div className="mt-4 h-48 w-full">

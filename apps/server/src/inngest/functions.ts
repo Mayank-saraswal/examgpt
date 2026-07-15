@@ -6,6 +6,9 @@ import { paperExtract } from "./paper-extract";
 import { attemptTimeoutSweep } from "./attempt-sweep";
 import { attemptAnalyze } from "./attempt-analyze";
 import { paperGenerate } from "./paper-generate";
+import { userCleanup } from "./user-cleanup";
+import { captureException, captureMessage } from "../observability/sentry";
+import { logger } from "../logger";
 
 /**
  * Phase 0 placeholder.
@@ -16,6 +19,32 @@ export const helloWorld = inngest.createFunction(
   async ({ event, step }) => {
     await step.run("log", async () => ({ received: event.name }));
     return { ok: true };
+  },
+);
+
+/**
+ * Phase 7 — central Inngest failure alert (logs + optional Sentry).
+ * Functions should also set onFailure where user-visible status is updated.
+ */
+export const inngestFailureAlert = inngest.createFunction(
+  { id: "inngest-failure-alert" },
+  { event: "inngest/function.failed" },
+  async ({ event }) => {
+    const data = event.data as {
+      function_id?: string;
+      run_id?: string;
+      error?: { message?: string; name?: string };
+    };
+    const msg = `Inngest failure: ${data.function_id ?? "unknown"} — ${data.error?.message ?? "error"}`;
+    logger.error({ data }, msg);
+    captureMessage(msg, "error");
+    if (data.error) {
+      captureException(new Error(data.error.message ?? "inngest failed"), {
+        function_id: data.function_id,
+        run_id: data.run_id,
+      });
+    }
+    return { ok: true, alerted: true };
   },
 );
 
@@ -64,6 +93,7 @@ export const syllabusIngest = inngest.createFunction(
 
 export const functions = [
   helloWorld,
+  inngestFailureAlert,
   syllabusIngest,
   documentIngest,
   chatMemorySync,
@@ -71,4 +101,5 @@ export const functions = [
   attemptTimeoutSweep,
   attemptAnalyze,
   paperGenerate,
+  userCleanup,
 ];

@@ -48,6 +48,8 @@ export async function validateOpenRouterModels(opts?: {
     const missing: OpenRouterValidateResult["missing"] = [];
     for (const task of tasks) {
       const cfg = getModelConfig(task);
+      // Env may re-route default OpenRouter tasks to openai/google (e.g. gpt-4o-mini)
+      if (cfg.provider !== "openrouter") continue;
       if (ids.has(cfg.modelId)) continue;
       const fellBackTo = getDefaultModelId(task);
       missing.push({ task, requested: cfg.modelId, fellBackTo });
