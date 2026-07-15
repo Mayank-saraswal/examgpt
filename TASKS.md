@@ -60,21 +60,23 @@ Providers: `@ai-sdk/openai` (direct key), `@ai-sdk/google` (direct key), `@openr
 
 | Task key | Default model | Provider route | Env override | Notes |
 |---|---|---|---|---|
-| `ocr` | Gemini Flash (latest) | Google direct | `AI_MODEL_OCR` | Pages: printed, handwritten, tables, diagrams → structured markdown + image descriptions. Escalate hard pages to Pro. |
-| `vision-extract` | Gemini Pro (latest) | Google direct | `AI_MODEL_VISION_EXTRACT` | Question/option/answer-key extraction from papers. `temperature: 0`, `generateObject`. |
-| `embedding` | `text-embedding-3-large` | OpenAI direct | `AI_MODEL_EMBEDDING` | English-heavy corpus → best fit for the keys the user owns. FROZEN after first ingestion. |
-| `chat-rag` | GPT (latest flagship) | OpenAI direct | `AI_MODEL_CHAT` | Streaming tutor answers with citations. Alternative: Claude Sonnet via OpenRouter — pick after Phase 3 eval. |
-| `intent-agent` | Claude Sonnet (latest) | OpenRouter | `AI_MODEL_INTENT` | Fired when retrieval confidence low + vague query; asks one clarifying question. |
-| `report-analysis` | Claude Opus-class (latest) | OpenRouter | `AI_MODEL_REPORT` | The flagship output. Highest-reasoning model available. |
-| `paper-generation` | Claude Sonnet / GPT flagship | OpenRouter / OpenAI | `AI_MODEL_PAPERGEN` | Generates original MCQs from syllabus+notes. `generateObject`. |
-| `web-search` | Perplexity Sonar Pro | OpenRouter | `AI_MODEL_WEBSEARCH` | Cutoffs, missing-answer fallback. Results must carry source URLs. |
-| `title-gen` | small cheap model (GPT mini / Gemini Flash-lite) | direct | `AI_MODEL_TITLE` | Chat titles, tiny classifications. |
+| `ocr` | `gemini-3.5-flash` | Google direct | `AI_MODEL_OCR` | Pages: printed, handwritten, tables, diagrams → structured markdown + image descriptions. |
+| `vision-extract` | `gemini-3.5-flash` | Google direct | `AI_MODEL_VISION_EXTRACT` | Question/option/answer-key extraction from papers. `temperature: 0`, `generateObject`. Also identifies figure bboxes for diagram crops. |
+| `embedding` | `text-embedding-3-large` | OpenAI direct | `AI_MODEL_EMBEDDING` | English-heavy corpus. FROZEN after first ingestion. |
+| `chat-rag` | `gpt-4.1` | OpenAI direct | `AI_MODEL_CHAT` | Streaming tutor answers with citations. |
+| `intent-agent` | `z-ai/glm-5.2` | OpenRouter | `AI_MODEL_INTENT` | Vague-query clarifying questions. |
+| `explain` | `z-ai/glm-5.2` | OpenRouter | `AI_MODEL_EXPLAIN` | Per-question text explanations, answer cross-checks, paper-gen quality-gate. |
+| `explain-vision` | `anthropic/claude-sonnet-5` | OpenRouter | `AI_MODEL_EXPLAIN_VISION` | Explanations when question has `imageKeys` (cropped figure attached). Alts: `gemini-3.5-flash` (Google, once billing), `gpt-5.2` (OpenAI), `z-ai/glm-5v-turbo` (budget). |
+| `report-analysis` | `x-ai/grok-4.5` | OpenRouter | `AI_MODEL_REPORT` | Report narrative / topic coaching. Alt: `anthropic/claude-opus-4.8`. Override must fully switch model+provider. |
+| `paper-generation` | `anthropic/claude-sonnet-5` | OpenRouter | `AI_MODEL_PAPERGEN` | Original MCQs from syllabus+notes. Text-only in v1 (no diagram gen). |
+| `web-search` | `perplexity/sonar-pro-search` | OpenRouter | `AI_MODEL_WEBSEARCH` | Cutoffs, missing-answer fallback. Results carry source URLs. |
+| `title-gen` | `gpt-4.1-mini` | OpenAI direct | `AI_MODEL_TITLE` | Chat titles, tiny classifications. |
 
-**Rule:** at server boot, fetch the OpenRouter model list and validate every configured OpenRouter model ID; log warning + fall back to default if missing. Never hardcode model IDs outside `packages/ai/registry.ts`. *(Model names above are directional — the implementing agent MUST verify current best IDs at build time; provider catalogs change.)*
+**Rule:** at server boot, fetch the OpenRouter model list and validate every configured OpenRouter model ID (provider=`openrouter` only); log warning + fall back to default if missing. Never hardcode model IDs outside `packages/ai/registry.ts`. IDs verified against live OpenRouter catalog on 2026-07-15.
 
-**NOTE (2026-07-15):** OCR/vision temporarily routed to OpenAI via env override (Gemini billing pending); revert by removing the two env lines `AI_MODEL_OCR` and `AI_MODEL_VISION_EXTRACT`. Registry infers provider from the override model id (`gpt-*` → openai) so provider selection switches, not only the model string. Current live override: `gpt-4o-mini` (verified via OpenAI models API). Optional: `AI_PROVIDER_OCR` / `AI_PROVIDER_VISION_EXTRACT`.
+**NOTE (2026-07-15):** OCR/vision temporarily routed to OpenAI via env override (Gemini billing pending); revert by removing `AI_MODEL_OCR` and `AI_MODEL_VISION_EXTRACT`. Registry infers provider from override model id. Optional: `AI_PROVIDER_*`.
 
-Cost logging: every call writes `AiUsageLog { userId, task, model, tokensIn, tokensOut, costUsd, latencyMs }`. Per-user daily budget caps enforced in the registry wrapper (throw `TOO_MANY_REQUESTS` when exceeded; configurable per plan).
+Cost logging: every call writes `AiUsageLog { userId, task, model, tokensIn, tokensOut, costUsd, latencyMs }`. Per-user daily budget caps in the registry wrapper. **`Report.totalCostUsd`** = sum of AiUsageLog rows for that attempt's analyze pipeline (visible in admin usage summary). Side-by-side narrative compare: `bun scripts/compare-report-models.ts <attemptId> <modelId>…` → `.data/model-compare/{attemptId}/`.
 
 ---
 
@@ -417,11 +419,39 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - **Acceptance:** `bun run check` green; chaos pass (kill Qdrant → chat degrades with clear message, not crash; kill Postgres → 503s, no data corruption on recovery); Sentry captures a thrown test error from all three apps when DSN set.
   - **Live verify (2026-07-15):** `phase7-verify` **7/7 PASS** — health returns `postgres:up`/`qdrant:up` + `X-Request-Id` + Helmet `nosniff`; seed demo user; deleteAccount cleanup path; tRPC health.ping. Chaos code paths: `/health` → **503** if Postgres down; chat stream search failures → user-visible degraded message (not hard crash). Sentry optional (DSN unset locally = disabled logs only).
 
+### Phase 7.5 — Platform PYQ bank + admin panel
+
+**Schema choice:** extend `Test` with `visibility: PRIVATE | PLATFORM` (default `PRIVATE`) and **nullable `userId` only when `visibility=PLATFORM`**. Platform papers are shared read-only catalog rows; user-owned uploads stay `PRIVATE` with required `userId`. Rejected separate `PlatformPaper` model — reuses questions/extract/review/CBT paths with one visibility flag + null owner.
+
+**HARD INVARIANT:** attempts, reports, chat, and Qdrant user filters stay user-scoped. Platform content is read-only shared; every attempt/report still has exactly one `userId`.
+
+- [ ] Schema migration: `TestVisibility` enum; `userId String?` with check (PRIVATE ⇒ userId set); `examType` (or join ExamType), `paperYear`, `publishedAt`, `contentHash` for admin dedupe. Indexes: `(visibility, publishedAt)`, `(visibility, examType, paperYear)`.
+- [ ] `adminProcedure`: requires `Clerk JWT publicMetadata.role === "admin"` **AND** `userId ∈ ADMIN_USER_IDS` env allowlist (both). Non-admin → `FORBIDDEN`. Wire role into tRPC ctx from Clerk session claims (see clerk-backend-api skill).
+- [ ] Web-only `/admin` UI behind same check (redirect / not-found for non-admins). No emoji; no purple; lucide only.
+- [ ] Admin: upload PYQ (exam + year + PDF via existing presign) → same `paper/extract` (incl. diagram crops) → reuse review screen → Publish/Unpublish; list platform papers + status; AiUsageLog summary page.
+- [ ] question_bank timing: platform extract does **not** write per-user bank rows; `attempt/analyze` upserts after grading for the attempting user. Adjust `scripts/backfill-question-bank.ts`.
+- [ ] User-facing: Tests → "Previous Year Papers" tab (web + mobile): published platform papers filtered by user exam profile; year badges; Start test (no upload wait). Attempt/report/cutoff identical to PYQ uploads.
+- [ ] Dedupe: admin upload with existing `contentHash` warns + links to existing platform paper.
+- [ ] Empty/loading/error states on all admin + PYQ tab screens.
+- [ ] Unit tests: adminProcedure authz; platform visibility filter by exam; question_bank write-timing (extract no-write, analyze write).
+- [ ] Live-verify: set `publicMetadata.role=admin` + `ADMIN_USER_IDS`; admin-upload one NEET PYQ → publish → start from Previous Year Papers → report. Record here.
+
+**Diagram support (prerequisite for platform PYQ quality):**
+- [ ] paper/extract: page → PNG; vision-extract returns per-Q figure flags + normalized bboxes; crop (sharp) → storage → `Question.imageKeys` / `options[].imageKey`; failed crop → `flagged` for review.
+- [ ] Exam + report UI render figures (web + mobile); missing → placeholder + report affordance.
+- [ ] Explanations: `imageKeys` → `explain-vision` with crop; else `explain`.
+- [ ] AI-generated papers: text-only v1 (UI copy).
+- [ ] Unit tests: bbox→pixel clamp; extract schema imageKeys; explain routing. Live-verify one diagram-heavy page.
+
+**Model routing (registry):**
+- [ ] Tasks `explain` / `explain-vision`; defaults per §3 table; call-site moves; `compare-report-models.ts`; `Report.totalCostUsd` rollup + unit test.
+
 ### Phase 8 — Deployment + release
-- [ ] Server: Dockerfile → Railway/Render/Fly (pick one, document); managed Postgres (Neon/Supabase-postgres); Qdrant Cloud; Inngest Cloud; R2 prod bucket; prod Clerk instance.
+- [ ] Server: Dockerfile → Railway/Render/Fly (pick one, document); managed Postgres (Neon/Supabase-postgres); Qdrant Cloud; Inngest Cloud; R2 prod bucket; prod Clerk instance (incl. admin role setup).
 - [ ] Web: Vercel, env wired, custom domain.
 - [ ] Mobile: EAS build profiles (dev/preview/prod), app icons/splash (no purple), deep-link/universal-link config verified in prod, store listings, TestFlight + Play internal track.
 - [ ] Staging environment + migration flow (`prisma migrate deploy` in CI).
+- [ ] New env in `.env.example` + deploy docs: `ADMIN_USER_IDS`, `AI_MODEL_EXPLAIN`, `AI_MODEL_EXPLAIN_VISION`, Sentry DSNs, rate limits.
 - **NOTE (R2):** Before any production deploy, re-verify R2 S3 credentials with `bun run scripts/r2-diagnose.ts` (expects PutObject/GetObject/HeadBucket OK). Do not ship with untested keys — prior Access Key/Secret pairs returned HTTP 403 AccessDenied despite a valid bucket and CORS. Production must use `STORAGE_BACKEND=r2` with working keys; local `/storage/local` is dev-only and must never mount in production.
 - **Acceptance:** A fresh phone installs from TestFlight/internal track, signs up with Google or email OTP, and completes the full loop against production infra.
 
