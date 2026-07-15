@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
+import { shadcn } from "@clerk/ui/themes";
 import { Geist, Geist_Mono } from "next/font/google";
 import { TRPCReactProvider } from "@/trpc/client";
+import { SentryInit } from "@/components/sentry-init";
 import "@examgpt/ui-tokens/css";
 import "./globals.css";
 
@@ -35,8 +37,26 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col">
+        <SentryInit />
         {publishableKey ? (
-          <ClerkProvider publishableKey={publishableKey}>
+          <ClerkProvider
+            publishableKey={publishableKey}
+            signInUrl="/sign-in"
+            signUpUrl="/sign-up"
+            signInFallbackRedirectUrl="/dashboard"
+            signUpFallbackRedirectUrl="/onboarding"
+            appearance={{
+              // Match shadcn/ui app chrome; override Clerk default purple
+              theme: shadcn,
+              variables: {
+                colorPrimary: "#2563eb",
+                colorDanger: "#dc2626",
+                colorSuccess: "#16a34a",
+                colorWarning: "#d97706",
+                borderRadius: "0.5rem",
+              },
+            }}
+          >
             {app}
           </ClerkProvider>
         ) : (

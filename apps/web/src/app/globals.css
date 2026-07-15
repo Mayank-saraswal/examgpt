@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "@examgpt/ui-tokens/css";
+@import "@clerk/ui/themes/shadcn.css";
 
 @theme inline {
   --color-eg-primary: var(--eg-primary);

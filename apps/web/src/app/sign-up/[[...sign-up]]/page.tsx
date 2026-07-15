@@ -1,6 +1,36 @@
-import { redirect } from "next/navigation";
+import { SignUp } from "@clerk/nextjs";
+import Link from "next/link";
 
-/** Combined auth lives on /sign-in — keep route for old links. */
-export default function SignUpRedirectPage() {
-  redirect("/sign-in");
+/**
+ * Official Clerk prebuilt sign-up UI (path routing under /sign-up/*).
+ * @see https://clerk.com/docs/nextjs/guides/development/custom-sign-up-page
+ */
+export default function SignUpPage() {
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+
+  if (!publishableKey) {
+    return (
+      <div className="flex min-h-full flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-sm font-medium text-[var(--eg-error)]">
+          Clerk is not configured. Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY in
+          apps/web/.env.local
+        </p>
+        <Link href="/" className="text-sm text-[var(--eg-primary)] underline">
+          Back home
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-full flex-1 items-center justify-center p-6">
+      <SignUp
+        routing="path"
+        path="/sign-up"
+        signInUrl="/sign-in"
+        fallbackRedirectUrl="/onboarding"
+        signInFallbackRedirectUrl="/dashboard"
+      />
+    </div>
+  );
 }
