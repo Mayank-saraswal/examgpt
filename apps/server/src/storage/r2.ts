@@ -3,6 +3,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageAdapter } from "@examgpt/api";
@@ -73,6 +74,11 @@ export function createR2Storage(): StorageAdapter | null {
       } catch {
         return null;
       }
+    },
+    async deleteObject(key) {
+      await client.send(
+        new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }),
+      );
     },
   };
 }

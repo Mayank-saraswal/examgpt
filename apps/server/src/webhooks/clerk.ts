@@ -97,11 +97,19 @@ export async function clerkWebhookHandler(req: Request, res: Response) {
       });
     } else if (event.type === "user.deleted") {
       const id = event.data.id;
+      // Snapshot keys before cascade so cleanup can purge storage
+      const docs = await db.document.findMany({
+        where: { userId: id },
+        select: { fileKey: true },
+      });
+      const fileKeys = docs
+        .map((d) => d.fileKey)
+        .filter((k): k is string => Boolean(k));
       await inngest.send({
         name: "user/deleted",
-        data: { userId: id },
+        data: { userId: id, fileKeys },
       });
-      // Best-effort local delete; cleanup job handles R2/Qdrant later
+      // Cascade DB delete; cleanup job purges Qdrant/R2/mem0 using fileKeys
       await db.user.deleteMany({ where: { id } });
     }
 

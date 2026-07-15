@@ -21,6 +21,8 @@ export type StorageAdapter = {
   headObject?: (
     key: string,
   ) => Promise<{ contentLength: number; contentType?: string } | null>;
+  /** Phase 7 — account cleanup / document purge */
+  deleteObject?: (key: string) => Promise<void>;
 };
 
 const addByUrlInput = z.object({

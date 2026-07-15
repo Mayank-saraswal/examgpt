@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile, stat } from "node:fs/promises";
+import { mkdir, readFile, writeFile, stat, unlink } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import type { StorageAdapter } from "@examgpt/api";
 import { env } from "../env";
@@ -80,6 +80,13 @@ export function createLocalStorage(): StorageAdapter {
         return { contentLength: s.size, contentType: "application/pdf" };
       } catch {
         return null;
+      }
+    },
+    async deleteObject(key) {
+      try {
+        await unlink(localPathForKey(key));
+      } catch {
+        // already gone
       }
     },
   };
