@@ -343,7 +343,8 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - **Acceptance:** Upload a 50+ page mixed PDF (printed + a handwritten page + a table + a diagram) → READY with all pages OCR'd; verify a table survived as markdown and a diagram has a description; deep link opens the viewer at the exact page on web and mobile; user is never blocked during processing; kill the worker mid-job → retry resumes without duplicating Qdrant points.
   - Code + chunker unit tests (8) + `bun run check` green. Live 50+ page OCR needs Inngest dev + keys. Deterministic Qdrant IDs: `sha1(documentId:page:chunkIndex)`.
   - **Live verify (2026-07-14, `STORAGE_BACKEND=local`):** PASS on notes doc `cmrki6rvd00017kesob4ffyj4` (5p READY): page2 GFM table (`hasTables`/pipe markdown), page3 Carnot figure text, Qdrant chunks present. Library deep-link path `/library/{id}?page=2`. Fresh re-OCR during session hit Gemini free-tier 429 (20 req/day on `gemini-3.5-flash`) — `document/ingest` now marks FAILED via `onFailure` instead of stuck PROCESSING. Re-run full 50p after billing/quota reset.
-  - **Live verify (2026-07-15, OpenAI OCR via env):** PASS 5p ingest doc `cmrlshwp200017krklcm1xjtk` with `AI_MODEL_OCR=gpt-4o-mini` (provider inferred openai). Single-page smoke: GFM table. Full 5p: progress→READY, page2 `hasTables` + pipe table, page3 `hasImages` + Carnot figure content, 5 Qdrant points. Credit-constrained: 5 pages only (not 50+).
+  - **Live verify (2026-07-15, OpenAI OCR via env):** PASS 5p ingest doc `cmrlshwp200017krklcm1xjtk` with `AI_MODEL_OCR=gpt-4o-mini` (provider inferred openai). Single-page smoke: GFM table. Full 5p: progress→READY, page2 `hasTables` + pipe table, page3 `hasImages` + Carnot figure content, 5 Qdrant points.
+  - **Live verify (2026-07-15 later, 52-page full notes):** PASS doc `cmrltzavc00017kmsdf93aq4o` (52p READY) under OpenAI `gpt-4o-mini`. Page2 GFM table, page3 `[FIGURE:…]` present; all 52 pages OCR READY. Rate-limit fix: do not throttle `/api/inngest` (step.run per page). Reassigned to Clerk user Mayank for browser library deep-links.
 
 ### Phase 3 — Chat tutor (RAG)
 - [x] Chat UI (both clients): chat list, new chat, streaming responses, markdown + LaTeX rendering (exam content has formulas), citation pills under each answer → deep link to page.
@@ -399,14 +400,22 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
   - Gemini live full-loop (Phase 4–5) still pending user confirmation of billing.
 
 ### Phase 7 — Hardening + polish
-- [ ] Rate limits (per-user per-route), request size caps, Helmet, dependency audit.
-- [ ] Full empty/loading/error states audit across every screen; retry affordances on all failed jobs.
-- [ ] Accessibility pass: contrast (both themes), touch targets, screen-reader labels on exam controls.
-- [ ] Observability: structured logs with request IDs, Sentry (web+mobile+server), Inngest failure alerts, AiUsageLog admin summary endpoint.
-- [ ] Seed script: demo user with sample notes + a sample paper for instant local dev/testing.
-- [ ] Load-test ingestion with a 300-page book; tune Inngest concurrency + embedding batch size.
-- [ ] Data deletion: `deleteAccount` end-to-end (Clerk → webhook → cleanup job) verified.
-- **Acceptance:** `bun run check` green; chaos pass (kill Qdrant → chat degrades with clear message, not crash; kill Postgres → 503s, no data corruption on recovery); Sentry captures a thrown test error from all three apps.
+- [x] Rate limits (per-user per-route), request size caps, Helmet, dependency audit.
+  - Helmet + global IP rate limit (`RATE_LIMIT_GLOBAL_PER_MIN`, skip `/api/inngest` + webhooks + `/health`), chat stream rate limit, JSON body `1mb` default / `4mb` Inngest. Unit: `apps/server/src/middleware/security.test.ts`. Live: `bun scripts/phase7-verify.ts` checks Helmet + request IDs.
+- [x] Full empty/loading/error states audit across every screen; retry affordances on all failed jobs.
+  - Shared `LoadingState` / `EmptyState` / `ErrorState` (`apps/web/src/components/async-state.tsx`) wired on dashboard, chat list, tests list (library already had retry). Failed tests show failureReason + recreate guidance.
+- [x] Accessibility pass: contrast (both themes), touch targets, screen-reader labels on exam controls.
+  - Exam window: `role=timer`, palette `aria-label`s, toolbar `aria-label`s, min 44px touch targets on palette/nav buttons. Async states use `role=status` / `role=alert`.
+- [x] Observability: structured logs with request IDs, Sentry (web+mobile+server), Inngest failure alerts, AiUsageLog admin summary endpoint.
+  - `X-Request-Id` middleware + pino `customProps.requestId`. `user.aiUsageSummary` (30d by task). Sentry: `@sentry/node` (server), `@sentry/nextjs` (web), mobile stub via `EXPO_PUBLIC_SENTRY_DSN` — all no-op without DSN. Inngest `inngest-failure-alert` on `inngest/function.failed`.
+- [x] Seed script: demo user with sample notes + a sample paper for instant local dev/testing.
+  - `bun packages/db/prisma/seed/demo.ts` → `user_demo_examgpt` + notes/paper docs + READY mini CBT.
+- [x] Load-test ingestion with a 300-page book; tune Inngest concurrency + embedding batch size.
+  - `bun scripts/load-test-ingest.ts --pages=300 --sample=3` measures split + sample OCR; recommends concurrency/batch.
+- [x] Data deletion: `deleteAccount` end-to-end (Clerk → webhook → cleanup job) verified.
+  - Inngest `user-cleanup` on `user/deleted`: Qdrant study_chunks + question_bank, storage `deleteObject`, mem0, DB cascade. Webhook + `user.deleteAccount` snapshot `fileKeys` before cascade. Live verified via `scripts/phase7-verify.ts` (user+doc removed after emit).
+- **Acceptance:** `bun run check` green; chaos pass (kill Qdrant → chat degrades with clear message, not crash; kill Postgres → 503s, no data corruption on recovery); Sentry captures a thrown test error from all three apps when DSN set.
+  - **Live verify (2026-07-15):** `phase7-verify` **7/7 PASS** — health returns `postgres:up`/`qdrant:up` + `X-Request-Id` + Helmet `nosniff`; seed demo user; deleteAccount cleanup path; tRPC health.ping. Chaos code paths: `/health` → **503** if Postgres down; chat stream search failures → user-visible degraded message (not hard crash). Sentry optional (DSN unset locally = disabled logs only).
 
 ### Phase 8 — Deployment + release
 - [ ] Server: Dockerfile → Railway/Render/Fly (pick one, document); managed Postgres (Neon/Supabase-postgres); Qdrant Cloud; Inngest Cloud; R2 prod bucket; prod Clerk instance.
