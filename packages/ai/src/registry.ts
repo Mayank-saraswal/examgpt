@@ -84,16 +84,68 @@ const envKey: Record<AiTask, string> = {
 /** Runtime overrides after OpenRouter catalog validation (task → modelId). */
 const runtimeOverrides = new Map<AiTask, string>();
 
+/** Optional explicit provider env (e.g. AI_PROVIDER_OCR=openai). */
+const providerEnvKey: Record<AiTask, string> = {
+  ocr: "AI_PROVIDER_OCR",
+  "vision-extract": "AI_PROVIDER_VISION_EXTRACT",
+  embedding: "AI_PROVIDER_EMBEDDING",
+  "chat-rag": "AI_PROVIDER_CHAT",
+  "intent-agent": "AI_PROVIDER_INTENT",
+  "report-analysis": "AI_PROVIDER_REPORT",
+  "paper-generation": "AI_PROVIDER_PAPERGEN",
+  "web-search": "AI_PROVIDER_WEBSEARCH",
+  "title-gen": "AI_PROVIDER_TITLE",
+};
+
+/**
+ * When AI_MODEL_* overrides the model id, also switch provider so ocr/vision
+ * can move google→openai without changing registry defaults.
+ */
+export function inferProviderFromModelId(
+  modelId: string,
+  fallback: ModelConfig["provider"],
+  explicit?: string | undefined,
+): ModelConfig["provider"] {
+  const e = explicit?.trim().toLowerCase();
+  if (e === "openai" || e === "google" || e === "openrouter") return e;
+
+  const id = modelId.trim().toLowerCase();
+  if (!id) return fallback;
+  // OpenRouter ids are vendor/model
+  if (id.includes("/")) return "openrouter";
+  if (id.startsWith("gemini") || id.includes("gemini-")) return "google";
+  if (
+    id.startsWith("gpt-") ||
+    id.startsWith("o1") ||
+    id.startsWith("o3") ||
+    id.startsWith("o4") ||
+    id.startsWith("chatgpt") ||
+    id.startsWith("text-embedding")
+  ) {
+    return "openai";
+  }
+  return fallback;
+}
+
 export function getDefaultModelId(task: AiTask): string {
   return defaults[task].modelId;
 }
 
 export function getModelConfig(task: AiTask): ModelConfig {
   const base = defaults[task];
-  const envOverride = process.env[envKey[task]];
+  const envOverride = process.env[envKey[task]]?.trim();
   const runtime = runtimeOverrides.get(task);
   const modelId = runtime ?? envOverride ?? base.modelId;
-  return { ...base, modelId };
+  // Only re-infer provider when model id was overridden (env or runtime)
+  const modelWasOverridden = Boolean(runtime ?? envOverride);
+  const provider = modelWasOverridden
+    ? inferProviderFromModelId(
+        modelId,
+        base.provider,
+        process.env[providerEnvKey[task]],
+      )
+    : base.provider;
+  return { ...base, modelId, provider };
 }
 
 export function setRuntimeModelOverride(task: AiTask, modelId: string): void {

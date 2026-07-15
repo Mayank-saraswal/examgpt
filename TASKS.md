@@ -72,6 +72,8 @@ Providers: `@ai-sdk/openai` (direct key), `@ai-sdk/google` (direct key), `@openr
 
 **Rule:** at server boot, fetch the OpenRouter model list and validate every configured OpenRouter model ID; log warning + fall back to default if missing. Never hardcode model IDs outside `packages/ai/registry.ts`. *(Model names above are directional — the implementing agent MUST verify current best IDs at build time; provider catalogs change.)*
 
+**NOTE (2026-07-15):** OCR/vision temporarily routed to OpenAI via env override (Gemini billing pending); revert by removing the two env lines `AI_MODEL_OCR` and `AI_MODEL_VISION_EXTRACT`. Registry infers provider from the override model id (`gpt-*` → openai) so provider selection switches, not only the model string. Current live override: `gpt-4o-mini` (verified via OpenAI models API). Optional: `AI_PROVIDER_OCR` / `AI_PROVIDER_VISION_EXTRACT`.
+
 Cost logging: every call writes `AiUsageLog { userId, task, model, tokensIn, tokensOut, costUsd, latencyMs }`. Per-user daily budget caps enforced in the registry wrapper (throw `TOO_MANY_REQUESTS` when exceeded; configurable per plan).
 
 ---
@@ -341,6 +343,7 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - **Acceptance:** Upload a 50+ page mixed PDF (printed + a handwritten page + a table + a diagram) → READY with all pages OCR'd; verify a table survived as markdown and a diagram has a description; deep link opens the viewer at the exact page on web and mobile; user is never blocked during processing; kill the worker mid-job → retry resumes without duplicating Qdrant points.
   - Code + chunker unit tests (8) + `bun run check` green. Live 50+ page OCR needs Inngest dev + keys. Deterministic Qdrant IDs: `sha1(documentId:page:chunkIndex)`.
   - **Live verify (2026-07-14, `STORAGE_BACKEND=local`):** PASS on notes doc `cmrki6rvd00017kesob4ffyj4` (5p READY): page2 GFM table (`hasTables`/pipe markdown), page3 Carnot figure text, Qdrant chunks present. Library deep-link path `/library/{id}?page=2`. Fresh re-OCR during session hit Gemini free-tier 429 (20 req/day on `gemini-3.5-flash`) — `document/ingest` now marks FAILED via `onFailure` instead of stuck PROCESSING. Re-run full 50p after billing/quota reset.
+  - **Live verify (2026-07-15, OpenAI OCR via env):** PASS 5p ingest doc `cmrlshwp200017krklcm1xjtk` with `AI_MODEL_OCR=gpt-4o-mini` (provider inferred openai). Single-page smoke: GFM table. Full 5p: progress→READY, page2 `hasTables` + pipe table, page3 `hasImages` + Carnot figure content, 5 Qdrant points. Credit-constrained: 5 pages only (not 50+).
 
 ### Phase 3 — Chat tutor (RAG)
 - [x] Chat UI (both clients): chat list, new chat, streaming responses, markdown + LaTeX rendering (exam content has formulas), citation pills under each answer → deep link to page.
@@ -371,6 +374,7 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - **Acceptance:** Upload a real NEET/JEE PYQ PDF → CBT window matches spec; mismatched paper (upload a random PDF) triggers the warning path; kill the app mid-attempt → resume with correct remaining time + palette; let timer expire in background → attempt auto-submitted server-side; double-tap submit → single submission; all five palette states reachable and correctly counted.
   - Code + unit tests (palette property, scoring, server-time) + `bun run check`. Live PYQ: upload paper doc → createFromPaper → Inngest paper-extract → review/start on web `/exam/{attemptId}` and mobile.
   - **Live verify (2026-07-14):** Attempt engine PASS (local storage): mixed event stream produced palette states ANSWERED / MARKED / ANSWERED_MARKED / NOT_ANSWERED; option-change trail on Q0; submit scored 7/20; double-submit safe (non-IN_PROGRESS short-circuit). **Blocked this session:** live `paper/extract` OCR failed (`Could not OCR any pages`) due to Gemini free-tier 429 — same quota as Phase 2 re-OCR. Pipeline correctly FAILED (with `onFailure`). Re-run extract on real NEET PDF after quota reset; web `/exam/{attemptId}` still needs a Clerk session for browser UI (server-side attempt logic covered by script).
+  - **Live verify (2026-07-15, real NEET PDF + OpenAI):** PASS extract on root file `NEET_2026_Answer_Key_Solution_Code_11_Download.pdf.pdf` with `PAPER_EXTRACT_MAX_PAGES=5`, `gpt-4o-mini` OCR+vision. Fixed OpenAI structured-output schema (`nullable` not bare `optional`). test `cmrlsrdor00037ksgmzmltfyh` → **READY with 8 MCQs** (Physics samples with keys). Open: http://localhost:3000/tests/cmrlsrdor00037ksgmzmltfyh (Clerk). Full-paper OCR (all pages) deferred for credits.
 
 ### Phase 5 — Analysis + report
 - [x] `attempt/analyze` pipeline per §6. Grading from `markingScheme`; questions with `answerConfidence < 1` get a cross-check pass (re-solve + notes/web verify) before grading.

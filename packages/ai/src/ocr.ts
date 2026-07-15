@@ -1,7 +1,7 @@
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getModelConfig } from "./registry";
+import { getLanguageModel } from "./providers";
 import { withAiUsage } from "./usage";
 
 const pageOcrSchema = z.object({
@@ -18,19 +18,12 @@ const pageOcrSchema = z.object({
 
 export type PageOcrResult = z.infer<typeof pageOcrSchema>;
 
-function requireGoogleKey(): string {
-  const key = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-  if (!key) {
-    throw new Error(
-      "GOOGLE_GENERATIVE_AI_API_KEY is required for OCR (packages/ai). Add it to .env",
-    );
-  }
-  return key;
-}
-
 /**
- * OCR a single page (PDF bytes or image) via Gemini through the model registry.
- * @see https://ai-sdk.dev/providers/ai-sdk-providers/google-generative-ai
+ * OCR a single page (PDF bytes or image) via the model registry.
+ * Provider-agnostic: uses getLanguageModel so AI_MODEL_OCR can switch
+ * google → openai (or openrouter) without code changes.
+ *
+ * Content is passed as AI SDK multimodal parts (file / image).
  */
 export async function ocrPage(opts: {
   data: Uint8Array | Buffer;
@@ -38,14 +31,33 @@ export async function ocrPage(opts: {
   pageNumber: number;
   userId?: string | null;
 }): Promise<PageOcrResult> {
-  const apiKey = requireGoogleKey();
   const cfg = getModelConfig("ocr");
-  if (cfg.provider !== "google") {
-    throw new Error(`OCR task must use google provider, got ${cfg.provider}`);
-  }
+  const model = getLanguageModel("ocr");
+  const bytes = Buffer.isBuffer(opts.data)
+    ? opts.data
+    : Buffer.from(opts.data);
 
-  const google = createGoogleGenerativeAI({ apiKey });
-  const model = google(cfg.modelId);
+  // OpenAI vision path prefers image/*; PDF file parts are unreliable on chat models.
+  // For PDF pages on openai: send as file with filename when possible, else image.
+  const mediaPart =
+    cfg.provider === "openai" && opts.mediaType.startsWith("image/")
+      ? ({
+          type: "image" as const,
+          image: bytes,
+          mediaType: opts.mediaType,
+        } as const)
+      : cfg.provider === "openai" && opts.mediaType === "application/pdf"
+        ? ({
+            type: "file" as const,
+            data: bytes,
+            mediaType: "application/pdf" as const,
+            filename: `page-${opts.pageNumber}.pdf`,
+          } as const)
+        : ({
+            type: "file" as const,
+            data: bytes,
+            mediaType: opts.mediaType,
+          } as const);
 
   const result = await withAiUsage({
     userId: opts.userId,
@@ -73,11 +85,7 @@ Rules:
 5. Set hasHandwriting / hasImages / hasTables accurately.
 6. Do not invent content that is not on the page.`,
               },
-              {
-                type: "file",
-                data: opts.data,
-                mediaType: opts.mediaType,
-              },
+              mediaPart,
             ],
           },
         ],

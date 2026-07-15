@@ -21,14 +21,15 @@ function loadEnv() {
 }
 loadEnv();
 
+const { ocrPage, getModelConfig } = await import("@examgpt/ai");
+const ocrCfg = getModelConfig("ocr");
+console.log("OCR config", ocrCfg);
 console.log(
+  "OPENAI key set?",
+  Boolean(process.env.OPENAI_API_KEY),
   "GOOGLE key set?",
   Boolean(process.env.GOOGLE_GENERATIVE_AI_API_KEY),
-  "len",
-  process.env.GOOGLE_GENERATIVE_AI_API_KEY?.length,
 );
-
-const { ocrPage } = await import("@examgpt/ai");
 const { PDFDocument, StandardFonts } = await import("pdf-lib");
 
 const pdf = await PDFDocument.create();

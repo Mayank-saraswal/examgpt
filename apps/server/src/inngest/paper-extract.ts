@@ -93,9 +93,20 @@ export const paperExtract = inngest.createFunction(
       if (!doc.fileKey) throw new Error("Document has no file");
       const bytes = await downloadDocumentBytes(doc.fileKey);
       const pages = await splitPdfPages(bytes);
+      // Credit guard: PAPER_EXTRACT_MAX_PAGES (default 8). Full papers can be huge.
+      const maxPages = Math.max(
+        1,
+        Math.min(
+          40,
+          Number(process.env.PAPER_EXTRACT_MAX_PAGES ?? 8) || 8,
+        ),
+      );
       const mds: string[] = [];
-      for (const p of pages.slice(0, 40)) {
-        // cap pages for cost
+      logger.info(
+        { documentId, totalPages: pages.length, maxPages },
+        "paper OCR page budget",
+      );
+      for (const p of pages.slice(0, maxPages)) {
         try {
           const r = await ocrPage({
             data: p.bytes,

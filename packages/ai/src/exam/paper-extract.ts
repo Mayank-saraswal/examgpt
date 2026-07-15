@@ -8,25 +8,64 @@ export const extractedOptionSchema = z.object({
   text: z.string().min(1),
 });
 
+/**
+ * OpenAI structured outputs require every property key to appear in `required`.
+ * Use `.nullable()` (not bare `.optional()`) so optional fields serialize as
+ * required + null-able instead of missing from the required array.
+ */
 export const extractedQuestionSchema = z.object({
   index: z.number().int().positive(),
-  section: z.string().optional(),
+  section: z.string().nullable(),
   text: z.string().min(1),
   options: z.array(extractedOptionSchema).min(2),
-  correctKey: z.string().optional(),
-  topic: z.string().optional(),
-  subtopic: z.string().optional(),
+  correctKey: z.string().nullable(),
+  topic: z.string().nullable(),
+  subtopic: z.string().nullable(),
 });
 
 export const paperExtractSchema = z.object({
-  title: z.string().optional(),
-  paperYear: z.number().int().optional(),
-  durationMin: z.number().int().positive().optional(),
+  title: z.string().nullable(),
+  paperYear: z.number().int().nullable(),
+  durationMin: z.number().int().positive().nullable(),
   questions: z.array(extractedQuestionSchema).min(1),
 });
 
-export type ExtractedPaper = z.infer<typeof paperExtractSchema>;
-export type ExtractedQuestion = z.infer<typeof extractedQuestionSchema>;
+export type ExtractedPaper = {
+  title?: string;
+  paperYear?: number;
+  durationMin?: number;
+  questions: ExtractedQuestion[];
+};
+export type ExtractedQuestion = {
+  index: number;
+  section?: string;
+  text: string;
+  options: { key: string; text: string }[];
+  correctKey?: string;
+  topic?: string;
+  subtopic?: string;
+};
+
+function nullToUndef<T>(v: T | null | undefined): T | undefined {
+  return v == null ? undefined : v;
+}
+
+function normalizeExtracted(raw: z.infer<typeof paperExtractSchema>): ExtractedPaper {
+  return {
+    title: nullToUndef(raw.title),
+    paperYear: nullToUndef(raw.paperYear) ?? undefined,
+    durationMin: nullToUndef(raw.durationMin) ?? undefined,
+    questions: raw.questions.map((q) => ({
+      index: q.index,
+      section: nullToUndef(q.section),
+      text: q.text,
+      options: q.options,
+      correctKey: nullToUndef(q.correctKey),
+      topic: nullToUndef(q.topic),
+      subtopic: nullToUndef(q.subtopic),
+    })),
+  };
+}
 
 /**
  * Extract MCQs from OCR markdown of a paper (temperature 0).
@@ -50,8 +89,10 @@ export async function extractPaperQuestions(opts: {
 Rules:
 - Preserve option keys A/B/C/D when present.
 - Every question MUST have question text and at least 2 options.
-- Include correctKey only if an answer key is clearly present in the text.
-- Assign section labels (Physics/Chemistry/Biology/Math) when clear.
+- Include correctKey only if an answer key is clearly present in the text; otherwise set correctKey to null.
+- Assign section labels (Physics/Chemistry/Biology/Math) when clear; otherwise null.
+- topic/subtopic null when unknown.
+- title/paperYear/durationMin null when unknown.
 - index is 1-based sequential order.
 
 OCR:
@@ -59,7 +100,7 @@ ${opts.markdown.slice(0, 120_000)}`,
       });
     },
   });
-  return result.object;
+  return normalizeExtracted(result.object);
 }
 
 export type ValidatedQuestion = ExtractedQuestion & {
