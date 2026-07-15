@@ -19,15 +19,38 @@ import { createPrismaUsageSink } from "./ai/usage-sink";
 import { createLocalStorageRouter } from "./storage/local-routes";
 import { shouldMountLocalStorageRoutes } from "./storage/local-routes-policy";
 import { storageBackend } from "./storage";
+import {
+  chatStreamRateLimit,
+  globalRateLimit,
+  requestIdMiddleware,
+  securityHeaders,
+} from "./middleware/security";
+import { captureException, initSentry } from "./observability/sentry";
+import { db } from "@examgpt/db";
+import { getQdrant } from "./qdrant/client";
+
+initSentry();
 
 const app = express();
+
+// Phase 7 — request IDs + security headers + global rate limit
+app.use(requestIdMiddleware);
+app.use(securityHeaders);
+app.use(globalRateLimit);
 
 app.use(
   pinoHttp({
     logger,
     autoLogging: env.NODE_ENV !== "test",
+    customProps(req) {
+      return { requestId: req.headers["x-request-id"] };
+    },
   }),
 );
+
+// Request size caps (chat/inngest override with their own limits)
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
 app.use(
   cors({
@@ -47,12 +70,33 @@ if (clerkConfigured()) {
   app.use(clerkMiddleware());
 }
 
-app.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
+/**
+ * Liveness/readiness. Returns 503 if Postgres is unreachable (chaos / load balancers).
+ * Qdrant is reported but non-fatal for /health — chat degrades separately.
+ */
+app.get("/health", async (_req, res) => {
+  let dbOk = false;
+  let qdrantOk = false;
+  try {
+    await db.$queryRaw`SELECT 1`;
+    dbOk = true;
+  } catch (err) {
+    logger.error({ err }, "health: postgres down");
+  }
+  try {
+    await getQdrant().getCollections();
+    qdrantOk = true;
+  } catch (err) {
+    logger.warn({ err }, "health: qdrant unreachable");
+  }
+  const ok = dbOk;
+  res.status(ok ? 200 : 503).json({
+    ok,
     service: "examgpt-server",
     clerk: clerkConfigured(),
-    qdrant: env.QDRANT_URL,
+    postgres: dbOk ? "up" : "down",
+    qdrant: qdrantOk ? "up" : "down",
+    qdrantUrl: env.QDRANT_URL,
     timestamp: new Date().toISOString(),
   });
 });
@@ -68,6 +112,7 @@ app.post(
 // JSON body for chat stream + inngest (tRPC uses its own parser)
 app.post(
   "/chat/stream",
+  chatStreamRateLimit,
   express.json({ limit: "1mb" }),
   (req, res) => {
     void chatStreamHandler(req, res);
@@ -107,10 +152,13 @@ app.use(
     createContext,
     onError({ error, path }) {
       logger.error({ err: error, path }, "tRPC error");
+      captureException(error, { path, source: "trpc" });
     },
   }),
 );
 
+// Do NOT rate-limit /api/inngest — each step.run is a separate HTTP call;
+// throttling here stalls multi-page OCR pipelines.
 app.use(
   "/api/inngest",
   express.json({ limit: "4mb" }),
