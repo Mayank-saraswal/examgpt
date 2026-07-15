@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: typecheck · lint · test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: examgpt
+          POSTGRES_PASSWORD: examgpt
+          POSTGRES_DB: examgpt
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U examgpt"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://examgpt:examgpt@localhost:5432/examgpt
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.4
+      - name: Install
+        run: bun install --frozen-lockfile
+      - name: Prisma generate
+        run: bun run db:generate
+      - name: Prisma migrate (CI / staging)
+        run: bunx prisma migrate deploy --schema packages/db/prisma/schema.prisma
+      - name: Check
+        run: bun run check
+
+  # Staging deploy hook — enable when Railway staging service + secrets exist.
+  # migrate_staging:
+  #   if: github.ref == 'refs/heads/staging' && github.event_name == 'push'
+  #   needs: check
+  #   runs-on: ubuntu-latest
+  #   env:
+  #     DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: oven-sh/setup-bun@v2
+  #     - run: bun install --frozen-lockfile
+  #     - run: bunx prisma migrate deploy --schema packages/db/prisma/schema.prisma

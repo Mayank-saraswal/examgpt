@@ -51,6 +51,15 @@ bun run --filter @examgpt/mobile dev
 bun run check   # typecheck + lint + test
 ```
 
+## Deployment
+
+See **[`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)** (Phase 8).
+
+- API: `apps/server/Dockerfile` → Railway (`railway.toml`)
+- Web: Vercel
+- Mobile: EAS profiles in `apps/mobile/eas.json`
+- CI: `.github/workflows/ci.yml` (`bun run check` + `prisma migrate deploy`)
+
 ## Phase 0 acceptance
 
 - `bun run check` green

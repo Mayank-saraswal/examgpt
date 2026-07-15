@@ -448,12 +448,13 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - [x] Tasks `explain` / `explain-vision`; defaults per §3 table; call-site moves; `compare-report-models.ts`; `Report.totalCostUsd` rollup + unit test (commit `76f2030`).
 
 ### Phase 8 — Deployment + release
-- [ ] Server: Dockerfile → Railway/Render/Fly (pick one, document); managed Postgres (Neon/Supabase-postgres); Qdrant Cloud; Inngest Cloud; R2 prod bucket; prod Clerk instance (incl. admin role setup).
-- [ ] Web: Vercel, env wired, custom domain.
-- [ ] Mobile: EAS build profiles (dev/preview/prod), app icons/splash (no purple), deep-link/universal-link config verified in prod, store listings, TestFlight + Play internal track.
-- [ ] Staging environment + migration flow (`prisma migrate deploy` in CI).
-- [ ] New env in `.env.example` + deploy docs: `ADMIN_USER_IDS`, `AI_MODEL_EXPLAIN`, `AI_MODEL_EXPLAIN_VISION`, Sentry DSNs, rate limits.
+- [x] Server: Dockerfile (`apps/server/Dockerfile`) → **Railway** (`railway.toml`); docs for Neon Postgres, Qdrant Cloud, Inngest Cloud, R2 prod, prod Clerk (incl. admin role + session JWT public_metadata). See `docs/DEPLOYMENT.md`.
+- [x] Web: Vercel wiring documented; env list in deploy guide (custom domain TBD with credentials).
+- [x] Mobile: EAS build profiles (`apps/mobile/eas.json` dev/preview/prod); deep-link scheme + intent filters in `app.json`; store checklist in deploy docs. Icons paths set (add assets before store submit). TestFlight/Play submit needs store credentials.
+- [x] Staging + migration flow: `.github/workflows/ci.yml` runs `prisma migrate deploy`; staging job stub ready for `STAGING_DATABASE_URL`.
+- [x] New env in `.env.example` + `docs/DEPLOYMENT.md`: `ADMIN_USER_IDS`, `AI_MODEL_EXPLAIN`, `AI_MODEL_EXPLAIN_VISION`, Sentry DSNs, rate limits, `STORAGE_BACKEND=r2`.
 - **NOTE (R2):** Before any production deploy, re-verify R2 S3 credentials with `bun run scripts/r2-diagnose.ts` (expects PutObject/GetObject/HeadBucket OK). Do not ship with untested keys — prior Access Key/Secret pairs returned HTTP 403 AccessDenied despite a valid bucket and CORS. Production must use `STORAGE_BACKEND=r2` with working keys; local `/storage/local` is dev-only and must never mount in production.
+- [ ] **Live deploy blocked on credentials** — see credential checklist at end of `docs/DEPLOYMENT.md`. Agent stops until you provide them step-by-step.
 - **Acceptance:** A fresh phone installs from TestFlight/internal track, signs up with Google or email OTP, and completes the full loop against production infra.
 
 ---

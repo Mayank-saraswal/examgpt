@@ -7,15 +7,47 @@
     "scheme": "examgpt",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0f172a"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.examgpt.mobile"
+      "bundleIdentifier": "app.examgpt.mobile",
+      "infoPlist": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["examgpt"]
+          }
+        ]
+      },
+      "associatedDomains": ["applinks:examgpt.app"]
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#2563eb"
       },
-      "package": "app.examgpt.mobile"
+      "package": "app.examgpt.mobile",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "examgpt"
+            },
+            {
+              "scheme": "https",
+              "host": "examgpt.app",
+              "pathPrefix": "/"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -33,6 +65,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
     }
   }
 }
