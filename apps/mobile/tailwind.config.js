@@ -12,6 +12,7 @@ module.exports = {
         success: colors.success,
         error: colors.error,
         warning: colors.warning,
+        exam: colors.exam,
       },
     },
   },

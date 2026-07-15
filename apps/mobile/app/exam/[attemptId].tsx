@@ -1,26 +1,30 @@
 import { useAuth } from "@clerk/expo";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   AppState,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import Markdown from "react-native-markdown-display";
 import { randomUUID } from "expo-crypto";
 import type { EventType, PaletteState, QuestionRuntimeState } from "@examgpt/ai";
-import { Button } from "../../src/components/ui/button";
+import { colors } from "@examgpt/ui-tokens";
 import {
   enqueueAttemptEvent,
   loadUnflushed,
   markFlushed,
 } from "../../src/attempt-queue";
 import { trpc } from "../../src/trpc";
+
+const EX = colors.exam;
 
 function formatMs(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -29,11 +33,37 @@ function formatMs(ms: number) {
   return `${m}:${String(sec).padStart(2, "0")}`;
 }
 
+function cellStyle(state: PaletteState) {
+  switch (state) {
+    case "ANSWERED":
+      return { backgroundColor: EX.answered };
+    case "NOT_ANSWERED":
+      return { backgroundColor: EX.notAnswered };
+    case "MARKED":
+    case "ANSWERED_MARKED":
+      return { backgroundColor: EX.marked };
+    default:
+      return {
+        backgroundColor: EX.notVisited,
+        borderWidth: 2,
+        borderColor: EX.notVisitedBorder,
+      };
+  }
+}
+
+function cellTextColor(state: PaletteState) {
+  return state === "NOT_VISITED" ? EX.notVisitedFg : "#ffffff";
+}
+
 export default function MobileExamScreen() {
   const { attemptId } = useLocalSearchParams<{ attemptId: string }>();
   const { isSignedIn } = useAuth();
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const landscape = width > height;
+
   const [started, setStarted] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [idx, setIdx] = useState(1);
   const [offsetMs, setOffsetMs] = useState(0);
   const [remainingMs, setRemainingMs] = useState(0);
@@ -41,6 +71,7 @@ export default function MobileExamScreen() {
     {},
   );
   const [confirm, setConfirm] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const state = useQuery({
     ...trpc.attempts.resume.queryOptions({ attemptId }),
@@ -195,115 +226,278 @@ export default function MobileExamScreen() {
     ? (JSON.parse(JSON.stringify(state.data.test.questions)) as Q[])
     : [];
   const current = questions.find((q) => q.index === idx) ?? questions[0];
-  const options = (Array.isArray(current?.options)
-    ? current!.options
-    : []) as { key: string; text: string }[];
+  const options = (
+    Array.isArray(current?.options) ? current!.options : []
+  ) as { key: string; text: string; imageKey?: string }[];
+  const total = questions.length;
+  const qPos = questions.findIndex((q) => q.index === idx) + 1 || 1;
+
+  const counts = useMemo(() => {
+    const acc: Record<string, number> = {};
+    for (const q of questions) {
+      const p = palette[q.index]?.paletteState ?? "NOT_VISITED";
+      acc[p] = (acc[p] ?? 0) + 1;
+    }
+    return acc;
+  }, [questions, palette]);
 
   if (!state.data) {
     return (
-      <View className="flex-1 items-center justify-center">
-        <ActivityIndicator color="#2563eb" />
+      <View className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator color={EX.action} />
       </View>
     );
   }
 
-  if (!started) {
+  if (!started || showInstructions) {
     return (
-      <ScrollView className="flex-1 bg-white px-4 py-6 dark:bg-slate-950">
-        <Text className="text-xl font-semibold">Instructions</Text>
-        <Text className="mt-2 text-sm text-slate-500">
+      <ScrollView
+        className="flex-1 bg-white"
+        contentContainerStyle={{ padding: 20, paddingBottom: 48 }}
+      >
+        <Text style={{ color: EX.mutedFg, fontSize: 13 }}>
           {state.data.test.title} · {state.data.test.durationMin} min ·{" "}
-          {questions.length} Q
+          {questions.length} questions
         </Text>
-        <Text className="mt-4 text-sm">
-          Timer is server-controlled. Palette: gray outline / red / green /
-          amber / amber+green dot. Answered & Marked counts at submit.
-        </Text>
-        <Button
-          title="START TEST"
-          onPress={() => {
-            setStarted(true);
-            const first = questions[0]?.index ?? 1;
-            setIdx(first);
-            void push(first, "VISIT");
+        <Text
+          style={{
+            color: EX.heading,
+            fontSize: 18,
+            fontWeight: "600",
+            marginTop: 20,
           }}
-        />
+        >
+          General Instructions
+        </Text>
+        <Text style={{ color: EX.fg, fontSize: 14, marginTop: 10, lineHeight: 20 }}>
+          1. The clock is server-controlled. When time runs out the exam
+          auto-submits.
+        </Text>
+        <Text style={{ color: EX.fg, fontSize: 14, marginTop: 8, lineHeight: 20 }}>
+          2. Palette statuses:
+        </Text>
+        {(
+          [
+            ["ANSWERED", "Answered", false],
+            ["NOT_ANSWERED", "Not answered", false],
+            ["MARKED", "Marked for review", false],
+            ["NOT_VISITED", "Not visited", false],
+            ["ANSWERED_MARKED", "Answered & marked", true],
+          ] as const
+        ).map(([st, label, dot]) => (
+          <View
+            key={st}
+            style={{ flexDirection: "row", alignItems: "center", marginTop: 8 }}
+          >
+            <View
+              style={[
+                {
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  alignItems: "center",
+                  justifyContent: "center",
+                },
+                cellStyle(st),
+              ]}
+            >
+              <Text style={{ color: cellTextColor(st), fontSize: 11, fontWeight: "700" }}>
+                15
+              </Text>
+              {dot ? (
+                <View
+                  style={{
+                    position: "absolute",
+                    bottom: 1,
+                    right: 1,
+                    width: 7,
+                    height: 7,
+                    borderRadius: 4,
+                    backgroundColor: EX.markedDot,
+                  }}
+                />
+              ) : null}
+            </View>
+            <Text style={{ marginLeft: 10, color: EX.fg, fontSize: 13 }}>
+              {label}
+            </Text>
+          </View>
+        ))}
+        <Text style={{ color: EX.mutedFg, fontSize: 13, marginTop: 12, lineHeight: 18 }}>
+          Marked for Review with an answer still counts at submit (NTA rule).
+        </Text>
+        <Text
+          style={{
+            color: EX.heading,
+            fontSize: 18,
+            fontWeight: "600",
+            marginTop: 24,
+          }}
+        >
+          Answering questions
+        </Text>
+        <Text style={{ color: EX.fg, fontSize: 14, marginTop: 8, lineHeight: 20 }}>
+          Select an option, use CLEAR to deselect, MARK FOR REVIEW & NEXT to
+          flag, SAVE & NEXT to save and advance.
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setShowInstructions(false);
+            if (!started) {
+              setStarted(true);
+              const first = questions[0]?.index ?? 1;
+              setIdx(first);
+              void push(first, "VISIT");
+            }
+          }}
+          style={{
+            marginTop: 32,
+            alignSelf: "center",
+            backgroundColor: EX.action,
+            paddingHorizontal: 40,
+            paddingVertical: 14,
+            borderRadius: 8,
+            minHeight: 48,
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+            START TEST
+          </Text>
+        </Pressable>
       </ScrollView>
     );
   }
 
+  const api = process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
+
   return (
-    <View className="flex-1 bg-white dark:bg-slate-950">
-      <View className="flex-row items-center justify-between border-b border-slate-200 px-3 py-2">
-        <Text className="flex-1 text-sm font-medium" numberOfLines={1}>
+    <View className="flex-1 bg-white">
+      {/* Header */}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottomWidth: 1,
+          borderBottomColor: EX.border,
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          minHeight: 48,
+        }}
+      >
+        <Text
+          style={{ flex: 1, fontSize: 14, fontWeight: "600", color: EX.fg }}
+          numberOfLines={1}
+        >
           {state.data.test.title}
         </Text>
-        <Text className="font-mono text-lg font-semibold">
+        <Text
+          style={{
+            fontFamily: "monospace",
+            fontSize: landscape ? 16 : 18,
+            fontWeight: "700",
+            color: remainingMs < 60_000 ? EX.notAnswered : EX.fg,
+            marginLeft: 8,
+          }}
+        >
           {formatMs(remainingMs)}
+        </Text>
+        <Text
+          style={{
+            marginLeft: 12,
+            fontSize: 13,
+            fontWeight: "600",
+            color: EX.mutedFg,
+          }}
+        >
+          {qPos}/{total}
         </Text>
       </View>
 
-      <ScrollView className="flex-1 px-3 py-3">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+      >
         {current && (
           <>
-            <Text className="text-xs text-slate-500">Q{current.index}</Text>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: EX.fg }}>
+              Q. {qPos} of {total}
+            </Text>
             <Markdown>{current.text}</Markdown>
-            {current.imageKeys?.length > 0 &&
-              current.imageKeys.map((key) => {
-                const api =
-                  process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
-                const src = `${api}/storage/local/${key
-                  .split("/")
-                  .map(encodeURIComponent)
-                  .join("/")}`;
-                return (
-                  <View
-                    key={key}
-                    className="my-2 overflow-hidden rounded-lg border border-slate-200"
-                  >
-                    <Image
-                      source={{ uri: src }}
-                      style={{ width: "100%", height: 180 }}
-                      resizeMode="contain"
-                      accessibilityLabel={`Figure for question ${current.index}`}
-                    />
-                    <Text className="px-2 py-1 text-xs text-slate-400">
-                      If the figure fails to load, report this question.
-                    </Text>
-                  </View>
-                );
-              })}
+            {current.imageKeys?.map((key) => (
+              <View
+                key={key}
+                style={{
+                  marginVertical: 8,
+                  borderWidth: 1,
+                  borderColor: EX.border,
+                  borderRadius: 8,
+                  overflow: "hidden",
+                }}
+              >
+                <Image
+                  source={{
+                    uri: `${api}/storage/local/${key
+                      .split("/")
+                      .map(encodeURIComponent)
+                      .join("/")}`,
+                  }}
+                  style={{ width: "100%", height: 160 }}
+                  resizeMode="contain"
+                  accessibilityLabel={`Figure for question ${current.index}`}
+                />
+                <Text style={{ fontSize: 11, color: EX.mutedFg, padding: 6 }}>
+                  If the figure fails to load, report this question.
+                </Text>
+              </View>
+            ))}
             {options.map((o) => {
               const sel = palette[current.index]?.selectedKey === o.key;
-              const optImg = (o as { imageKey?: string }).imageKey;
-              const api =
-                process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:4000";
               return (
                 <Pressable
                   key={o.key}
                   onPress={() =>
                     void push(current.index, sel ? "CHANGE" : "SELECT", o.key)
                   }
-                  className={`mb-2 rounded-lg border px-3 py-2 ${
-                    sel ? "border-primary-600 bg-primary-50" : "border-slate-200"
-                  }`}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "flex-start",
+                    gap: 12,
+                    marginBottom: 10,
+                    minHeight: 44,
+                    paddingVertical: 6,
+                    paddingHorizontal: 4,
+                    borderRadius: 8,
+                    backgroundColor: sel ? "#eff6ff" : "transparent",
+                  }}
                 >
-                  <Text>
-                    {o.key}. {o.text}
-                  </Text>
-                  {optImg ? (
-                    <Image
-                      source={{
-                        uri: `${api}/storage/local/${optImg
-                          .split("/")
-                          .map(encodeURIComponent)
-                          .join("/")}`,
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      borderWidth: 2,
+                      borderColor: sel ? EX.action : EX.notVisitedBorder,
+                      backgroundColor: sel ? EX.action : "#fff",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontWeight: "700",
+                        color: sel ? "#fff" : EX.fg,
+                        fontSize: 13,
                       }}
-                      style={{ width: "100%", height: 100, marginTop: 6 }}
-                      resizeMode="contain"
-                      accessibilityLabel={`Option ${o.key} figure`}
-                    />
-                  ) : null}
+                    >
+                      {o.key}
+                    </Text>
+                  </View>
+                  <Text style={{ flex: 1, fontSize: 14, color: EX.fg, paddingTop: 6 }}>
+                    {o.text}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -311,21 +505,82 @@ export default function MobileExamScreen() {
         )}
       </ScrollView>
 
-      <View className="flex-row flex-wrap gap-2 border-t border-slate-200 p-2">
-        <Button
-          title="Prev"
-          variant="outline"
+      {/* Sticky bottom action bar */}
+      <View
+        style={{
+          borderTopWidth: 1,
+          borderTopColor: EX.border,
+          paddingHorizontal: 8,
+          paddingVertical: 8,
+          flexDirection: "row",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 6,
+          backgroundColor: "#fff",
+        }}
+      >
+        <Pressable
+          accessibilityRole="button"
           onPress={() => {
-            void push(idx, "LEAVE");
-            const p = questions.filter((q) => q.index < idx).at(-1);
-            if (p) {
-              setIdx(p.index);
-              void push(p.index, "VISIT");
+            void push(idx, "MARK_REVIEW");
+            const n = questions.find((q) => q.index > idx);
+            if (n) {
+              setIdx(n.index);
+              void push(n.index, "VISIT");
             }
           }}
-        />
-        <Button
-          title="Save & Next"
+          style={{ minHeight: 44, paddingHorizontal: 10, justifyContent: "center" }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: "600", color: EX.fg }}>
+            MARK FOR REVIEW
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void push(idx, "CLEAR")}
+          style={{ minHeight: 44, paddingHorizontal: 10, justifyContent: "center" }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: "600", color: EX.fg }}>
+            CLEAR
+          </Text>
+        </Pressable>
+        <View style={{ flex: 1, flexDirection: "row", justifyContent: "center", alignItems: "center" }}>
+          <Pressable
+            accessibilityRole="button"
+            disabled={qPos <= 1}
+            onPress={() => {
+              const p = questions[qPos - 2];
+              if (p) {
+                void push(idx, "LEAVE");
+                setIdx(p.index);
+                void push(p.index, "VISIT");
+              }
+            }}
+            style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ fontSize: 18, color: EX.mutedFg }}>‹</Text>
+          </Pressable>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: EX.fg }}>
+            {qPos} of {total}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            disabled={qPos >= total}
+            onPress={() => {
+              const n = questions[qPos];
+              if (n) {
+                void push(idx, "LEAVE");
+                setIdx(n.index);
+                void push(n.index, "VISIT");
+              }
+            }}
+            style={{ minHeight: 44, minWidth: 44, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ fontSize: 18, color: EX.mutedFg }}>›</Text>
+          </Pressable>
+        </View>
+        <Pressable
+          accessibilityRole="button"
           onPress={() => {
             void push(idx, "SAVE_NEXT");
             const n = questions.find((q) => q.index > idx);
@@ -334,62 +589,205 @@ export default function MobileExamScreen() {
               void push(n.index, "VISIT");
             }
           }}
-        />
-        <Button
-          title="Clear"
-          variant="outline"
-          onPress={() => void push(idx, "CLEAR")}
-        />
-        <Button
-          title="Mark"
-          variant="outline"
-          onPress={() => void push(idx, "MARK_REVIEW")}
-        />
-        <Button title="Submit" onPress={() => setConfirm(true)} />
+          style={{
+            minHeight: 44,
+            backgroundColor: EX.action,
+            paddingHorizontal: 14,
+            borderRadius: 6,
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontWeight: "700", fontSize: 12 }}>
+            SAVE & NEXT
+          </Text>
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setPaletteOpen(true)}
+          style={{
+            minHeight: 44,
+            minWidth: 44,
+            borderWidth: 1,
+            borderColor: EX.border,
+            borderRadius: 6,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: "700", color: EX.fg }}>#</Text>
+        </Pressable>
       </View>
 
-      <ScrollView horizontal className="max-h-16 border-t border-slate-100 px-2 py-1">
-        {questions.map((q) => {
-          const st = palette[q.index]?.paletteState ?? "NOT_VISITED";
-          const bg =
-            st === "ANSWERED"
-              ? "bg-green-100 border-green-600"
-              : st === "NOT_ANSWERED"
-                ? "bg-red-50 border-red-500"
-                : st === "MARKED" || st === "ANSWERED_MARKED"
-                  ? "bg-amber-50 border-amber-500"
-                  : "border-slate-400";
-          return (
-            <Pressable
-              key={q.index}
-              onPress={() => {
-                void push(idx, "LEAVE");
-                setIdx(q.index);
-                void push(q.index, "VISIT");
-              }}
-              className={`mr-1 size-9 items-center justify-center rounded border-2 ${bg}`}
-            >
-              <Text className="text-xs font-semibold">{q.index}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      {/* Palette bottom sheet */}
+      <Modal
+        visible={paletteOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPaletteOpen(false)}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)" }}
+          onPress={() => setPaletteOpen(false)}
+        />
+        <View
+          style={{
+            backgroundColor: "#fff",
+            borderTopLeftRadius: 16,
+            borderTopRightRadius: 16,
+            maxHeight: landscape ? "90%" : "70%",
+            padding: 16,
+            paddingBottom: 28,
+          }}
+        >
+          <Text style={{ fontWeight: "700", fontSize: 15, marginBottom: 12 }}>
+            Question palette
+          </Text>
+          <ScrollView>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {questions.map((q) => {
+                const st =
+                  palette[q.index]?.paletteState ?? ("NOT_VISITED" as PaletteState);
+                return (
+                  <Pressable
+                    key={q.index}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Question ${q.index}`}
+                    onPress={() => {
+                      void push(idx, "LEAVE");
+                      setIdx(q.index);
+                      void push(q.index, "VISIT");
+                      setPaletteOpen(false);
+                    }}
+                    style={[
+                      {
+                        width: 44,
+                        height: 44,
+                        borderRadius: 22,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      },
+                      cellStyle(st),
+                      q.index === idx
+                        ? { borderWidth: 2, borderColor: EX.action }
+                        : null,
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        color: cellTextColor(st),
+                        fontWeight: "700",
+                        fontSize: 13,
+                      }}
+                    >
+                      {q.index}
+                    </Text>
+                    {st === "ANSWERED_MARKED" ? (
+                      <View
+                        style={{
+                          position: "absolute",
+                          bottom: 3,
+                          right: 3,
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: EX.markedDot,
+                        }}
+                      />
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={{ marginTop: 16, fontSize: 12, color: EX.mutedFg }}>
+              Answered {counts.ANSWERED ?? 0} · Not answered{" "}
+              {counts.NOT_ANSWERED ?? 0} · Marked{" "}
+              {(counts.MARKED ?? 0) + (counts.ANSWERED_MARKED ?? 0)} · Not
+              visited {counts.NOT_VISITED ?? 0}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 16, marginTop: 12 }}>
+              <Pressable onPress={() => setShowInstructions(true)}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: EX.mutedFg }}>
+                  INSTRUCTIONS
+                </Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+          <Pressable
+            onPress={() => {
+              setPaletteOpen(false);
+              setConfirm(true);
+            }}
+            style={{
+              marginTop: 16,
+              backgroundColor: EX.submit,
+              minHeight: 48,
+              borderRadius: 8,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+              SUBMIT
+            </Text>
+          </Pressable>
+        </View>
+      </Modal>
 
       {confirm && (
-        <View className="absolute inset-0 items-center justify-center bg-black/40 px-6">
-          <View className="w-full rounded-xl bg-white p-4 dark:bg-slate-900">
-            <Text className="text-lg font-semibold">Submit test?</Text>
-            <Button
-              title={submit.isPending ? "…" : "Confirm"}
+        <View
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.4)",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        >
+          <View
+            style={{
+              width: "100%",
+              backgroundColor: "#fff",
+              borderRadius: 12,
+              padding: 20,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: "700", color: EX.fg }}>
+              Submit test?
+            </Text>
+            <Text style={{ marginTop: 8, color: EX.mutedFg, fontSize: 13 }}>
+              Answered:{" "}
+              {(counts.ANSWERED ?? 0) + (counts.ANSWERED_MARKED ?? 0)} · Marked:{" "}
+              {(counts.MARKED ?? 0) + (counts.ANSWERED_MARKED ?? 0)}
+            </Text>
+            <Pressable
               onPress={() =>
                 void flush().then(() => submit.mutate({ attemptId }))
               }
-            />
-            <Button
-              title="Cancel"
-              variant="outline"
+              style={{
+                marginTop: 16,
+                backgroundColor: EX.submit,
+                minHeight: 48,
+                borderRadius: 8,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "700" }}>
+                {submit.isPending ? "…" : "Confirm"}
+              </Text>
+            </Pressable>
+            <Pressable
               onPress={() => setConfirm(false)}
-            />
+              style={{
+                marginTop: 8,
+                minHeight: 44,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ color: EX.mutedFg, fontWeight: "600" }}>Cancel</Text>
+            </Pressable>
           </View>
         </View>
       )}
