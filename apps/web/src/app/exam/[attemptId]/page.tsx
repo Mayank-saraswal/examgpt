@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -8,12 +8,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Flag,
-  Eraser,
+  Star,
+  Trash2,
+  X,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import { useTRPC } from "@/trpc/client";
-import { buttonVariants } from "@/components/ui/button";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { ExamInstructions } from "@/components/exam/exam-instructions";
+import { paletteCellClass, PALETTE_LEGEND } from "@/components/exam/palette-styles";
 import { cn } from "@/lib/utils";
 import {
   clearQueuedEvents,
@@ -25,18 +29,6 @@ import {
 } from "@/lib/attempt-events";
 import type { EventType, PaletteState, QuestionRuntimeState } from "@examgpt/ai";
 
-const PALETTE_STYLES: Record<
-  PaletteState,
-  string
-> = {
-  NOT_VISITED: "border-2 border-slate-400 bg-transparent text-slate-700",
-  NOT_ANSWERED: "border-2 border-red-500 bg-red-50 text-red-800 dark:bg-red-950",
-  ANSWERED: "border-2 border-green-600 bg-green-50 text-green-900 dark:bg-green-950",
-  MARKED: "border-2 border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950",
-  ANSWERED_MARKED:
-    "border-2 border-amber-500 bg-amber-50 text-amber-900 relative dark:bg-amber-950",
-};
-
 function formatMs(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(s / 3600);
@@ -47,21 +39,38 @@ function formatMs(ms: number) {
     : `${m}:${String(sec).padStart(2, "0")}`;
 }
 
+function figureSrc(key: string) {
+  const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  return `${api}/storage/local/${key
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/")}`;
+}
+
 export default function ExamPage() {
   const { attemptId } = useParams<{ attemptId: string }>();
   const { isSignedIn, isLoaded } = useAuth();
+  const { user } = useUser();
   const trpc = useTRPC();
   const router = useRouter();
 
   const [started, setStarted] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
   const [idx, setIdx] = useState(1);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [remainingMs, setRemainingMs] = useState(0);
-  /** Optimistic palette overrides (keyed by question index). */
+  const [paletteOpen, setPaletteOpen] = useState(true);
   const [paletteDelta, setPaletteDelta] = useState<
     Record<number, QuestionRuntimeState>
   >({});
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const candidateName =
+    user?.fullName ||
+    user?.firstName ||
+    user?.primaryEmailAddress?.emailAddress ||
+    "Candidate";
+  const candidateInitial = candidateName.charAt(0).toUpperCase();
 
   const state = useQuery({
     ...trpc.attempts.state.queryOptions({ attemptId }),
@@ -75,8 +84,7 @@ export default function ExamPage() {
   });
 
   const offsetMs = useMemo(() => {
-    const sn =
-      serverTime.data?.serverNow ?? state.data?.serverNow ?? null;
+    const sn = serverTime.data?.serverNow ?? state.data?.serverNow ?? null;
     if (!sn) return 0;
     return new Date(sn).getTime() - Date.now();
   }, [serverTime.data?.serverNow, state.data?.serverNow]);
@@ -94,7 +102,6 @@ export default function ExamPage() {
     [serverPalette, paletteDelta],
   );
 
-  // countdown from endsAt + offset (setState only from interval tick)
   useEffect(() => {
     if (!started || !state.data) return;
     const ends = new Date(state.data.attempt.endsAt).getTime();
@@ -134,7 +141,6 @@ export default function ExamPage() {
         })),
       });
     } catch {
-      // re-queue
       saveQueuedEvents(attemptId, [...batch, ...loadQueuedEvents(attemptId)]);
     }
   }, [attemptId, ingest]);
@@ -157,12 +163,13 @@ export default function ExamPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [started, flush, idx]);
 
-  // auto-submit at 0
   useEffect(() => {
-    if (started && remainingMs <= 0 && state.data?.attempt.status === "IN_PROGRESS") {
-      void flush().then(() =>
-        submit.mutate({ attemptId, autoTimeout: true }),
-      );
+    if (
+      started &&
+      remainingMs <= 0 &&
+      state.data?.attempt.status === "IN_PROGRESS"
+    ) {
+      void flush().then(() => submit.mutate({ attemptId, autoTimeout: true }));
     }
   }, [remainingMs, started, attemptId, flush, submit, state.data?.attempt.status]);
 
@@ -178,15 +185,21 @@ export default function ExamPage() {
     if (!state.data?.test.questions) return [];
     return JSON.parse(JSON.stringify(state.data.test.questions)) as Q[];
   }, [state.data?.test.questions]);
+
   const sections = useMemo(() => {
-    const s = new Set(questions.map((q) => q.section).filter(Boolean) as string[]);
+    const s = new Set(
+      questions.map((q) => q.section).filter(Boolean) as string[],
+    );
     return [...s];
   }, [questions]);
 
   const current = questions.find((q) => q.index === idx) ?? questions[0];
-  const options = (Array.isArray(current?.options)
-    ? current!.options
-    : []) as { key: string; text: string }[];
+  const options = (
+    Array.isArray(current?.options) ? current!.options : []
+  ) as { key: string; text: string; imageKey?: string }[];
+
+  const total = questions.length;
+  const qPos = questions.findIndex((q) => q.index === idx) + 1 || 1;
 
   function pushEvent(
     questionIndex: number,
@@ -201,7 +214,6 @@ export default function ExamPage() {
     };
     enqueueEvent(attemptId, e);
 
-    // optimistic palette delta
     setPaletteDelta((prev) => {
       const base = localPalette[questionIndex] ?? {
         questionIndex,
@@ -243,77 +255,53 @@ export default function ExamPage() {
   }
 
   function goTo(n: number) {
-    if (!current) return;
     pushEvent(idx, "LEAVE");
     setIdx(n);
     pushEvent(n, "VISIT");
   }
 
+  function sectionCounts(sec: string) {
+    const qs = questions.filter((q) => q.section === sec);
+    const acc: Record<string, number> = {};
+    for (const q of qs) {
+      const p = localPalette[q.index]?.paletteState ?? "NOT_VISITED";
+      acc[p] = (acc[p] ?? 0) + 1;
+    }
+    return acc;
+  }
+
   if (!isLoaded || state.isLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center">
-        <Loader2 className="size-8 animate-spin text-[var(--eg-primary)]" />
+      <div className="exam-portal flex min-h-dvh items-center justify-center">
+        <Loader2 className="size-8 animate-spin text-[var(--exam-action)]" />
       </div>
     );
   }
 
   if (!state.data) {
-    return <p className="p-8 text-sm text-red-600">Attempt not found</p>;
+    return (
+      <p className="exam-portal p-8 text-sm text-[var(--exam-not-answered)]">
+        Attempt not found
+      </p>
+    );
   }
 
-  if (!started) {
+  if (!started || showInstructions) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-10">
-        <h1 className="text-2xl font-semibold">Instructions</h1>
-        <p className="mt-2 text-sm text-[var(--eg-muted-fg)]">
-          {state.data.test.title} · {state.data.test.durationMin} minutes ·{" "}
-          {questions.length} questions
-        </p>
-        <ul className="mt-6 space-y-2 text-sm">
-          <li>Timer is controlled by the server. Do not rely on device clock.</li>
-          <li>Palette legend:</li>
-        </ul>
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          {(
-            [
-              ["NOT_VISITED", "Not visited"],
-              ["NOT_ANSWERED", "Not answered"],
-              ["ANSWERED", "Answered"],
-              ["MARKED", "Marked for review"],
-              ["ANSWERED_MARKED", "Answered & marked"],
-            ] as const
-          ).map(([k, label]) => (
-            <span
-              key={k}
-              className={cn(
-                "inline-flex items-center gap-1 rounded px-2 py-1",
-                PALETTE_STYLES[k],
-              )}
-            >
-              <span className="inline-block size-4 rounded-sm border" />
-              {label}
-              {k === "ANSWERED_MARKED" && (
-                <span className="size-1.5 rounded-full bg-green-600" />
-              )}
-            </span>
-          ))}
-        </div>
-        <p className="mt-4 text-sm text-[var(--eg-muted-fg)]">
-          Answered &amp; Marked for Review counts as answered at submit (NTA).
-        </p>
-        <button
-          type="button"
-          className={cn(buttonVariants({ size: "lg" }), "mt-8")}
-          onClick={() => {
+      <ExamInstructions
+        title={state.data.test.title}
+        durationMin={state.data.test.durationMin}
+        questionCount={questions.length}
+        onStart={() => {
+          setShowInstructions(false);
+          if (!started) {
             setStarted(true);
             const first = questions[0]?.index ?? 1;
             setIdx(first);
             pushEvent(first, "VISIT");
-          }}
-        >
-          START TEST
-        </button>
-      </div>
+          }
+        }}
+      />
     );
   }
 
@@ -326,294 +314,414 @@ export default function ExamPage() {
     {} as Record<string, number>,
   );
 
+  const activeSection = current?.section ?? null;
+
   return (
-    <div className="flex min-h-dvh flex-col bg-[var(--eg-bg)] lg:flex-row">
-      <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-[var(--eg-border)] px-4 py-2">
-          <p className="truncate text-sm font-medium">{state.data.test.title}</p>
+    <div className="exam-portal flex min-h-dvh flex-col bg-[var(--exam-bg)]">
+      {/* Top bar */}
+      <header className="flex items-center justify-between border-b border-[var(--exam-border)] px-4 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            aria-label="Close exam"
+            className="flex size-9 min-h-11 min-w-11 items-center justify-center rounded-md text-[var(--exam-muted-fg)] hover:bg-gray-100"
+            onClick={() => {
+              void flush();
+              router.push("/tests");
+            }}
+          >
+            <X className="size-5" />
+          </button>
+          <p className="truncate text-sm font-medium text-[var(--exam-fg)]">
+            {state.data.test.title}
+          </p>
           <p
             role="timer"
             aria-live="polite"
             aria-label={`Time remaining ${formatMs(remainingMs)}`}
             className={cn(
-              "min-h-11 min-w-11 font-mono text-lg font-semibold tabular-nums",
-              remainingMs < 60_000 ? "text-red-600" : "text-[var(--eg-fg)]",
+              "ml-2 font-mono text-sm font-semibold tabular-nums",
+              remainingMs < 60_000
+                ? "text-[var(--exam-not-answered)]"
+                : "text-[var(--exam-muted-fg)]",
             )}
           >
             {formatMs(remainingMs)}
           </p>
-        </header>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="flex size-9 items-center justify-center rounded-full bg-[var(--exam-answered)] text-sm font-semibold text-white">
+            {candidateInitial}
+          </span>
+          <span className="hidden text-sm font-medium sm:inline">
+            {candidateName}
+          </span>
+        </div>
+      </header>
 
-        {sections.length > 0 && (
-          <div className="flex gap-1 overflow-x-auto border-b border-[var(--eg-border)] px-2 py-1">
-            {sections.map((sec) => (
-              <button
-                key={sec}
-                type="button"
-                className="rounded px-2 py-1 text-xs font-medium hover:bg-slate-100 dark:hover:bg-slate-900"
-                onClick={() => {
-                  const q = questions.find((x) => x.section === sec);
-                  if (q) goTo(q.index);
-                }}
-              >
-                {sec}
-              </button>
-            ))}
-          </div>
-        )}
+      {/* Section tabs */}
+      <div className="flex gap-2 overflow-x-auto border-b border-[var(--exam-border)] px-4 py-2">
+        {(sections.length > 0 ? sections : ["EXAM"]).map((sec) => {
+          const isActive =
+            sections.length === 0
+              ? true
+              : activeSection === sec ||
+                (!activeSection && sec === sections[0]);
+          const sc = sections.length > 0 ? sectionCounts(sec) : counts;
+          return (
+            <button
+              key={sec}
+              type="button"
+              title={
+                sections.length > 0
+                  ? `A:${sc.ANSWERED ?? 0} NA:${sc.NOT_ANSWERED ?? 0} M:${(sc.MARKED ?? 0) + (sc.ANSWERED_MARKED ?? 0)} NV:${sc.NOT_VISITED ?? 0}`
+                  : undefined
+              }
+              className={cn(
+                "rounded border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide",
+                isActive
+                  ? "border-[var(--exam-fg)] bg-white text-[var(--exam-fg)]"
+                  : "border-[var(--exam-border)] text-[var(--exam-muted-fg)] hover:bg-gray-50",
+              )}
+              onClick={() => {
+                if (sections.length === 0) return;
+                const q = questions.find((x) => x.section === sec);
+                if (q) goTo(q.index);
+              }}
+            >
+              {sec}
+            </button>
+          );
+        })}
+      </div>
 
-        <main className="flex-1 overflow-y-auto p-4">
-          {current && (
-            <>
-              <p className="text-sm font-medium text-[var(--eg-muted-fg)]">
-                Question {current.index}
-                {current.section ? ` · ${current.section}` : ""}
-                {current.flagged ? " · excluded from scoring" : ""}
-              </p>
-              <div className="mt-2">
-                <ChatMarkdown content={current.text} />
-              </div>
-              {current.imageKeys?.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {current.imageKeys.map((key) => {
-                    const api =
-                      process.env.NEXT_PUBLIC_API_URL ??
-                      "http://localhost:4000";
-                    const src = `${api}/storage/local/${key
-                      .split("/")
-                      .map(encodeURIComponent)
-                      .join("/")}`;
-                    return (
+      <div className="flex min-h-0 flex-1">
+        {/* Question area */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <main className="flex-1 overflow-y-auto px-6 py-5">
+            {current && (
+              <>
+                <p className="text-sm font-semibold text-[var(--exam-fg)]">
+                  Q. {qPos} of {total}
+                  {current.flagged ? (
+                    <span className="ml-2 text-xs font-normal text-[var(--exam-muted-fg)]">
+                      (excluded from scoring)
+                    </span>
+                  ) : null}
+                </p>
+                <div className="mt-3 text-[15px] leading-relaxed">
+                  <ChatMarkdown content={current.text} />
+                </div>
+                {current.imageKeys?.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {current.imageKeys.map((key) => (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         key={key}
-                        src={src}
+                        src={figureSrc(key)}
                         alt={`Figure for question ${current.index}`}
-                        className="max-h-64 w-auto max-w-full rounded-lg border border-[var(--eg-border)] bg-white object-contain"
+                        className="max-h-64 w-auto max-w-full rounded border border-[var(--exam-border)] bg-white object-contain"
                         onError={(e) => {
                           (e.target as HTMLImageElement).alt =
                             "Figure unavailable — report this question";
-                          (e.target as HTMLImageElement).className +=
-                            " min-h-24 bg-[var(--eg-muted)]";
                         }}
                       />
+                    ))}
+                  </div>
+                )}
+                <div className="mt-6 space-y-3">
+                  {options.map((o) => {
+                    const selected =
+                      localPalette[current.index]?.selectedKey === o.key;
+                    return (
+                      <label
+                        key={o.key}
+                        className={cn(
+                          "flex cursor-pointer items-start gap-3 rounded-lg px-1 py-2",
+                          selected && "bg-blue-50",
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-semibold",
+                            selected
+                              ? "border-[var(--exam-action)] bg-[var(--exam-action)] text-white"
+                              : "border-[var(--exam-not-visited-border)] bg-white text-[var(--exam-fg)]",
+                          )}
+                        >
+                          {o.key}
+                        </span>
+                        <input
+                          type="radio"
+                          className="sr-only"
+                          name={`q-${current.index}`}
+                          checked={!!selected}
+                          onChange={() =>
+                            pushEvent(
+                              current.index,
+                              selected ? "CHANGE" : "SELECT",
+                              o.key,
+                            )
+                          }
+                        />
+                        <span className="flex flex-col gap-1 pt-1 text-sm">
+                          <span>{o.text}</span>
+                          {o.imageKey && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={figureSrc(o.imageKey)}
+                              alt={`Option ${o.key} figure`}
+                              className="max-h-32 w-auto rounded border border-[var(--exam-border)] object-contain"
+                            />
+                          )}
+                        </span>
+                      </label>
                     );
                   })}
                 </div>
-              )}
-              <div className="mt-4 space-y-2">
-                {options.map((o) => {
-                  const selected =
-                    localPalette[current.index]?.selectedKey === o.key;
-                  const optImg = (o as { imageKey?: string }).imageKey;
-                  const api =
-                    process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
-                  return (
-                    <label
-                      key={o.key}
-                      className={cn(
-                        "flex cursor-pointer gap-3 rounded-lg border px-3 py-2 text-sm",
-                        selected
-                          ? "border-[var(--eg-primary)] bg-blue-50 dark:bg-blue-950"
-                          : "border-[var(--eg-border)]",
-                      )}
-                    >
-                      <input
-                        type="radio"
-                        name={`q-${current.index}`}
-                        checked={!!selected}
-                        onChange={() =>
-                          pushEvent(
-                            current.index,
-                            selected ? "CHANGE" : "SELECT",
-                            o.key,
-                          )
-                        }
-                      />
-                      <span className="font-medium">{o.key}.</span>
-                      <span className="flex flex-col gap-1">
-                        <span>{o.text}</span>
-                        {optImg && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={`${api}/storage/local/${optImg
-                              .split("/")
-                              .map(encodeURIComponent)
-                              .join("/")}`}
-                            alt={`Option ${o.key} figure`}
-                            className="max-h-32 w-auto rounded border border-[var(--eg-border)] object-contain"
-                          />
-                        )}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </main>
+              </>
+            )}
+          </main>
 
-        <footer
-          className="flex flex-wrap gap-2 border-t border-[var(--eg-border)] p-3"
-          role="toolbar"
-          aria-label="Exam navigation"
+          {/* Bottom action bar */}
+          <footer
+            className="flex flex-wrap items-center gap-2 border-t border-[var(--exam-border)] px-4 py-2.5"
+            role="toolbar"
+            aria-label="Exam navigation"
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                aria-label="Mark for review and next"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-xs font-medium text-[var(--exam-fg)] hover:bg-gray-100"
+                onClick={() => {
+                  pushEvent(idx, "MARK_REVIEW");
+                  const next = questions.find((q) => q.index > idx);
+                  if (next) goTo(next.index);
+                }}
+              >
+                <Star className="size-4" aria-hidden />
+                MARK FOR REVIEW
+              </button>
+              <button
+                type="button"
+                aria-label="Clear response"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-xs font-medium text-[var(--exam-fg)] hover:bg-gray-100"
+                onClick={() => pushEvent(idx, "CLEAR")}
+              >
+                <Trash2 className="size-4" aria-hidden />
+                CLEAR
+              </button>
+            </div>
+
+            <div className="mx-auto flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="Previous question"
+                className="flex size-11 items-center justify-center rounded-md text-[var(--exam-muted-fg)] hover:bg-gray-100 disabled:opacity-40"
+                disabled={qPos <= 1}
+                onClick={() => {
+                  const prev = questions[qPos - 2];
+                  if (prev) goTo(prev.index);
+                }}
+              >
+                <ChevronLeft className="size-5" />
+              </button>
+              <span className="min-w-[4.5rem] text-center text-sm font-medium tabular-nums">
+                {qPos} of {total}
+              </span>
+              <button
+                type="button"
+                aria-label="Next question"
+                className="flex size-11 items-center justify-center rounded-md text-[var(--exam-muted-fg)] hover:bg-gray-100 disabled:opacity-40"
+                disabled={qPos >= total}
+                onClick={() => {
+                  const next = questions[qPos];
+                  if (next) goTo(next.index);
+                }}
+              >
+                <ChevronRight className="size-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Save and next"
+                className="inline-flex min-h-11 items-center gap-1 rounded-md bg-[var(--exam-action)] px-4 text-xs font-semibold text-[var(--exam-action-fg)] hover:brightness-95"
+                onClick={() => {
+                  pushEvent(idx, "SAVE_NEXT");
+                  const next = questions.find((q) => q.index > idx);
+                  if (next) goTo(next.index);
+                }}
+              >
+                SAVE &amp; NEXT
+                <ChevronRight className="size-4" aria-hidden />
+              </button>
+              <button
+                type="button"
+                className="flex size-11 items-center justify-center rounded-md border border-[var(--exam-border)] lg:hidden"
+                aria-label={paletteOpen ? "Hide palette" : "Show palette"}
+                onClick={() => setPaletteOpen((v) => !v)}
+              >
+                {paletteOpen ? (
+                  <PanelRightClose className="size-4" />
+                ) : (
+                  <PanelRightOpen className="size-4" />
+                )}
+              </button>
+            </div>
+          </footer>
+        </div>
+
+        {/* Right palette */}
+        <aside
+          className={cn(
+            "relative flex flex-col border-l border-[var(--exam-border)] bg-[var(--exam-panel)] transition-all",
+            paletteOpen
+              ? "w-full max-w-xs sm:w-72"
+              : "w-0 overflow-hidden border-l-0",
+            "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-40 max-lg:shadow-xl",
+            !paletteOpen && "max-lg:hidden",
+          )}
+          aria-label="Question palette"
         >
           <button
             type="button"
-            aria-label="Previous question"
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "min-h-11 min-w-11",
+            className="absolute -left-3 top-1/2 z-10 hidden size-6 -translate-y-1/2 items-center justify-center rounded-full border border-[var(--exam-border)] bg-white shadow lg:flex"
+            aria-label={paletteOpen ? "Collapse palette" : "Expand palette"}
+            onClick={() => setPaletteOpen((v) => !v)}
+          >
+            {paletteOpen ? (
+              <ChevronRight className="size-3" />
+            ) : (
+              <ChevronLeft className="size-3" />
             )}
-            disabled={idx <= 1}
-            onClick={() => goTo(idx - 1)}
-          >
-            <ChevronLeft className="size-4" aria-hidden /> Prev
           </button>
-          <button
-            type="button"
-            aria-label="Save answer and go to next question"
-            className={cn(buttonVariants({ size: "sm" }), "min-h-11")}
-            onClick={() => {
-              pushEvent(idx, "SAVE_NEXT");
-              const next = questions.find((q) => q.index > idx);
-              if (next) goTo(next.index);
-            }}
-          >
-            SAVE &amp; NEXT <ChevronRight className="size-4" aria-hidden />
-          </button>
-          <button
-            type="button"
-            aria-label="Clear selected option"
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "min-h-11",
-            )}
-            onClick={() => pushEvent(idx, "CLEAR")}
-          >
-            <Eraser className="size-4" aria-hidden /> CLEAR
-          </button>
-          <button
-            type="button"
-            aria-label="Save answer, mark for review, and go next"
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "min-h-11",
-            )}
-            onClick={() => {
-              pushEvent(idx, "MARK_REVIEW");
-              pushEvent(idx, "SAVE_NEXT");
-              const next = questions.find((q) => q.index > idx);
-              if (next) goTo(next.index);
-            }}
-          >
-            <Flag className="size-4" aria-hidden /> SAVE &amp; MARK
-          </button>
-          <button
-            type="button"
-            aria-label="Mark for review and go next"
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "min-h-11",
-            )}
-            onClick={() => {
-              pushEvent(idx, "MARK_REVIEW");
-              const next = questions.find((q) => q.index > idx);
-              if (next) goTo(next.index);
-            }}
-          >
-            MARK &amp; NEXT
-          </button>
-          <button
-            type="button"
-            aria-label="Submit test"
-            className={cn(
-              buttonVariants({ variant: "destructive", size: "sm" }),
-              "ml-auto min-h-11",
-            )}
-            onClick={() => setConfirmSubmit(true)}
-          >
-            Submit
-          </button>
-        </footer>
-      </div>
 
-      {/* Palette */}
-      <aside
-        className="border-t border-[var(--eg-border)] p-3 lg:w-64 lg:border-l lg:border-t-0"
-        aria-label="Question palette"
-      >
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--eg-muted-fg)]">
-          Palette
-        </p>
-        <div className="grid grid-cols-5 gap-1.5" role="list">
-          {questions.map((q) => {
-            const st =
-              localPalette[q.index]?.paletteState ?? ("NOT_VISITED" as PaletteState);
-            return (
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="grid grid-cols-5 gap-2" role="list">
+              {questions.map((q) => {
+                const st =
+                  localPalette[q.index]?.paletteState ??
+                  ("NOT_VISITED" as PaletteState);
+                return (
+                  <button
+                    key={q.index}
+                    type="button"
+                    role="listitem"
+                    aria-label={`Question ${q.index}, status ${st.replaceAll("_", " ").toLowerCase()}${q.index === idx ? ", current" : ""}`}
+                    aria-current={q.index === idx ? "true" : undefined}
+                    onClick={() => goTo(q.index)}
+                    className={paletteCellClass(st, { current: q.index === idx })}
+                  >
+                    {q.index}
+                    {st === "ANSWERED_MARKED" && (
+                      <span
+                        className="absolute bottom-0.5 right-0.5 size-2 rounded-full bg-[var(--exam-marked-dot)] ring-1 ring-white"
+                        aria-hidden
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            <ul className="mt-6 space-y-2 text-xs text-[var(--exam-muted-fg)]">
+              {PALETTE_LEGEND.map((item) => (
+                <li key={item.state} className="flex items-center gap-2">
+                  <span className={cn(paletteCellClass(item.state), "!size-5 !min-h-5 !min-w-5 !text-[10px]")}>
+                    {item.hasDot && (
+                      <span
+                        className="absolute bottom-0 right-0 size-1.5 rounded-full bg-[var(--exam-marked-dot)]"
+                        aria-hidden
+                      />
+                    )}
+                  </span>
+                  <span className="uppercase tracking-wide">
+                    {item.label}
+                    <span className="ml-1 font-semibold text-[var(--exam-fg)]">
+                      {counts[item.state] ?? 0}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="mt-6 flex flex-wrap gap-3 text-xs font-semibold uppercase tracking-wide text-[var(--exam-muted-fg)]">
               <button
-                key={q.index}
                 type="button"
-                role="listitem"
-                aria-label={`Question ${q.index}, status ${st.replaceAll("_", " ").toLowerCase()}${q.index === idx ? ", current" : ""}`}
-                aria-current={q.index === idx ? "true" : undefined}
-                onClick={() => goTo(q.index)}
-                className={cn(
-                  "relative flex size-11 min-h-11 min-w-11 items-center justify-center rounded text-xs font-semibold",
-                  PALETTE_STYLES[st],
-                  q.index === idx && "ring-2 ring-[var(--eg-primary)]",
-                )}
+                className="hover:text-[var(--exam-fg)]"
+                onClick={() => {
+                  /* all questions = jump to first */
+                  const first = questions[0];
+                  if (first) goTo(first.index);
+                }}
               >
-                {q.index}
-                {st === "ANSWERED_MARKED" && (
-                  <span
-                    className="absolute bottom-0.5 right-0.5 size-1.5 rounded-full bg-green-600"
-                    aria-hidden
-                  />
-                )}
+                All questions
               </button>
-            );
-          })}
-        </div>
-        <ul className="mt-3 space-y-1 text-xs text-[var(--eg-muted-fg)]">
-          <li>Not visited: {counts.NOT_VISITED ?? 0}</li>
-          <li>Not answered: {counts.NOT_ANSWERED ?? 0}</li>
-          <li>Answered: {counts.ANSWERED ?? 0}</li>
-          <li>Marked: {counts.MARKED ?? 0}</li>
-          <li>Answered &amp; marked: {counts.ANSWERED_MARKED ?? 0}</li>
-        </ul>
-      </aside>
+              <button
+                type="button"
+                className="hover:text-[var(--exam-fg)]"
+                onClick={() => setShowInstructions(true)}
+              >
+                Instructions
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-[var(--exam-border)] p-3">
+            <button
+              type="button"
+              aria-label="Submit test"
+              className="w-full min-h-11 rounded-md bg-[var(--exam-submit)] text-sm font-semibold text-[var(--exam-submit-fg)] hover:brightness-95"
+              onClick={() => setConfirmSubmit(true)}
+            >
+              SUBMIT
+            </button>
+          </div>
+        </aside>
+      </div>
 
       {confirmSubmit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-xl bg-[var(--eg-surface)] p-6 shadow-lg">
-            <h2 className="text-lg font-semibold">Submit test?</h2>
-            <ul className="mt-3 space-y-1 text-sm">
-              <li>Answered: {(counts.ANSWERED ?? 0) + (counts.ANSWERED_MARKED ?? 0)}</li>
-              <li>Not answered: {(counts.NOT_ANSWERED ?? 0) + (counts.NOT_VISITED ?? 0)}</li>
-              <li>Marked for review: {(counts.MARKED ?? 0) + (counts.ANSWERED_MARKED ?? 0)}</li>
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-lg">
+            <h2 className="text-lg font-semibold text-[var(--exam-fg)]">
+              Submit test?
+            </h2>
+            <ul className="mt-3 space-y-1 text-sm text-[var(--exam-muted-fg)]">
+              <li>
+                Answered:{" "}
+                {(counts.ANSWERED ?? 0) + (counts.ANSWERED_MARKED ?? 0)}
+              </li>
+              <li>
+                Not answered:{" "}
+                {(counts.NOT_ANSWERED ?? 0) + (counts.NOT_VISITED ?? 0)}
+              </li>
+              <li>
+                Marked for review:{" "}
+                {(counts.MARKED ?? 0) + (counts.ANSWERED_MARKED ?? 0)}
+              </li>
             </ul>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
-                className={cn(buttonVariants({ variant: "outline" }))}
+                className="min-h-11 rounded-md border border-[var(--exam-border)] px-4 text-sm"
                 onClick={() => setConfirmSubmit(false)}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className={cn(buttonVariants())}
+                className="min-h-11 rounded-md bg-[var(--exam-submit)] px-4 text-sm font-semibold text-white disabled:opacity-50"
                 disabled={submit.isPending}
                 onClick={() => {
-                  void flush().then(() => submit.mutate({ attemptId }));
+                  void flush().then(() =>
+                    submit.mutate({ attemptId, autoTimeout: false }),
+                  );
                 }}
               >
-                {submit.isPending ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  "Confirm submit"
-                )}
+                {submit.isPending ? "Submitting…" : "Confirm submit"}
               </button>
             </div>
           </div>
