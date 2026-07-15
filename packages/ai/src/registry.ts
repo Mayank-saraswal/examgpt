@@ -9,6 +9,8 @@ export type AiTask =
   | "embedding"
   | "chat-rag"
   | "intent-agent"
+  | "explain"
+  | "explain-vision"
   | "report-analysis"
   | "paper-generation"
   | "web-search"
@@ -44,17 +46,27 @@ const defaults: Record<AiTask, ModelConfig> = {
   },
   "intent-agent": {
     task: "intent-agent",
-    modelId: "anthropic/claude-sonnet-4",
+    modelId: "z-ai/glm-5.2",
+    provider: "openrouter",
+  },
+  explain: {
+    task: "explain",
+    modelId: "z-ai/glm-5.2",
+    provider: "openrouter",
+  },
+  "explain-vision": {
+    task: "explain-vision",
+    modelId: "anthropic/claude-sonnet-5",
     provider: "openrouter",
   },
   "report-analysis": {
     task: "report-analysis",
-    modelId: "anthropic/claude-sonnet-4",
+    modelId: "x-ai/grok-4.5",
     provider: "openrouter",
   },
   "paper-generation": {
     task: "paper-generation",
-    modelId: "anthropic/claude-sonnet-4",
+    modelId: "anthropic/claude-sonnet-5",
     provider: "openrouter",
   },
   "web-search": {
@@ -75,6 +87,8 @@ const envKey: Record<AiTask, string> = {
   embedding: "AI_MODEL_EMBEDDING",
   "chat-rag": "AI_MODEL_CHAT",
   "intent-agent": "AI_MODEL_INTENT",
+  explain: "AI_MODEL_EXPLAIN",
+  "explain-vision": "AI_MODEL_EXPLAIN_VISION",
   "report-analysis": "AI_MODEL_REPORT",
   "paper-generation": "AI_MODEL_PAPERGEN",
   "web-search": "AI_MODEL_WEBSEARCH",
@@ -91,6 +105,8 @@ const providerEnvKey: Record<AiTask, string> = {
   embedding: "AI_PROVIDER_EMBEDDING",
   "chat-rag": "AI_PROVIDER_CHAT",
   "intent-agent": "AI_PROVIDER_INTENT",
+  explain: "AI_PROVIDER_EXPLAIN",
+  "explain-vision": "AI_PROVIDER_EXPLAIN_VISION",
   "report-analysis": "AI_PROVIDER_REPORT",
   "paper-generation": "AI_PROVIDER_PAPERGEN",
   "web-search": "AI_PROVIDER_WEBSEARCH",
@@ -166,4 +182,9 @@ export function listOpenRouterTasks(): AiTask[] {
 
 export function getAllDefaults(): Record<AiTask, ModelConfig> {
   return { ...defaults };
+}
+
+/** Route text vs vision explanations by presence of image keys. */
+export function selectExplainTask(imageKeys: string[] | undefined | null): "explain" | "explain-vision" {
+  return imageKeys && imageKeys.length > 0 ? "explain-vision" : "explain";
 }

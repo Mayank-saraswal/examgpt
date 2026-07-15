@@ -6,6 +6,7 @@ export {
   setRuntimeModelOverride,
   clearRuntimeModelOverrides,
   getAllDefaults,
+  selectExplainTask,
   type AiTask,
   type ModelConfig,
 } from "./registry";

@@ -356,6 +356,8 @@ model Report {
   cutoffData       Json?
   /// ordered study plan items with optional doc/page refs
   recommendations  Json?
+  /// Sum of AiUsageLog.costUsd for this attempt's analyze pipeline
+  totalCostUsd     Float?
   failureReason    String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

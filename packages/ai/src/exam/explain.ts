@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { RetrievedChunk } from "../citations";
 import { validateAndSanitizeCitations } from "../citations";
 import { getLanguageModel, getTaskModelId } from "../providers";
+import { selectExplainTask, type AiTask } from "../registry";
 import { withAiUsage } from "../usage";
 
 const explainSchema = z.object({
@@ -20,11 +21,13 @@ export type QuestionExplainResult = {
   }[];
   webSources: { url: string; title: string }[];
   explanationSource: "notes" | "web" | "model" | "none";
+  taskUsed: AiTask;
 };
 
 /**
  * Short explanation for a graded question.
  * Prefer notes chunks (validated citations); else model-only with no fake pages.
+ * Questions with imageKeys use `explain-vision` + optional cropped figure bytes.
  */
 export async function explainQuestion(opts: {
   userId?: string | null;
@@ -33,7 +36,12 @@ export async function explainQuestion(opts: {
   correctKey: string | null;
   selectedKey: string | null;
   chunks: RetrievedChunk[];
+  /** Storage keys for cropped figures — routes to explain-vision when non-empty */
+  imageKeys?: string[];
+  /** Optional image bytes for vision explain (PNG/JPEG) */
+  image?: { data: Uint8Array | Buffer; mediaType: "image/png" | "image/jpeg" | "image/webp" };
 }): Promise<QuestionExplainResult> {
+  const task = selectExplainTask(opts.imageKeys);
   const optsText = opts.options
     .map((o) => `${o.key}) ${o.text}`)
     .join("\n");
@@ -48,18 +56,14 @@ export async function explainQuestion(opts: {
       : "(no notes context)";
 
   try {
-    const modelId = getTaskModelId("report-analysis");
+    const modelId = getTaskModelId(task);
     const result = await withAiUsage({
       userId: opts.userId,
-      task: "report-analysis",
+      task,
       model: modelId,
       run: async () => {
-        const model = getLanguageModel("report-analysis");
-        return generateObject({
-          model,
-          schema: explainSchema,
-          temperature: 0,
-          prompt: `Explain this MCQ for a student report.
+        const model = getLanguageModel(task);
+        const textPrompt = `Explain this MCQ for a student report.
 Correct answer: ${opts.correctKey ?? "unknown"}
 Student answered: ${opts.selectedKey ?? "skipped"}
 
@@ -76,7 +80,38 @@ Rules:
 - 3–6 sentences max.
 - If NOTES CONTEXT answers it, set usedNotes=true and cite [Title, p. N].
 - If notes insufficient, set usedNotes=false and explain from reasoning without page citations.
-- Never invent page numbers or book titles.`,
+- Never invent page numbers or book titles.
+${task === "explain-vision" ? "- Use the attached figure/diagram when explaining." : ""}`;
+
+        if (task === "explain-vision" && opts.image) {
+          const bytes = Buffer.isBuffer(opts.image.data)
+            ? opts.image.data
+            : Buffer.from(opts.image.data);
+          return generateObject({
+            model,
+            schema: explainSchema,
+            temperature: 0,
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "text", text: textPrompt },
+                  {
+                    type: "image",
+                    image: bytes,
+                    mediaType: opts.image.mediaType,
+                  },
+                ],
+              },
+            ],
+          });
+        }
+
+        return generateObject({
+          model,
+          schema: explainSchema,
+          temperature: 0,
+          prompt: textPrompt,
         });
       },
     });
@@ -96,6 +131,7 @@ Rules:
         })),
         webSources: [],
         explanationSource: "notes",
+        taskUsed: task,
       };
     }
 
@@ -103,7 +139,8 @@ Rules:
       explanation: validated.sanitizedContent,
       notesCitations: [],
       webSources: [],
-      explanationSource: result.object.usedNotes ? "model" : "model",
+      explanationSource: "model",
+      taskUsed: task,
     };
   } catch {
     const key = opts.correctKey ?? "?";
@@ -112,12 +149,13 @@ Rules:
       notesCitations: [],
       webSources: [],
       explanationSource: "none",
+      taskUsed: task,
     };
   }
 }
 
 /**
- * Cross-check AI-solved answer keys (confidence < 1).
+ * Cross-check AI-solved answer keys (confidence < 1) via `explain` task.
  */
 export async function crossCheckCorrectKey(opts: {
   userId?: string | null;
@@ -131,13 +169,13 @@ export async function crossCheckCorrectKey(opts: {
     rationale: z.string(),
   });
   try {
-    const modelId = getTaskModelId("vision-extract");
+    const modelId = getTaskModelId("explain");
     const result = await withAiUsage({
       userId: opts.userId,
-      task: "vision-extract",
+      task: "explain",
       model: modelId,
       run: async () => {
-        const model = getLanguageModel("vision-extract");
+        const model = getLanguageModel("explain");
         return generateObject({
           model,
           schema,

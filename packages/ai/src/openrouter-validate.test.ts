@@ -28,15 +28,15 @@ describe("validateOpenRouterModels", () => {
       fetchImpl: async () =>
         new Response(
           JSON.stringify({
-            data: [{ id: "anthropic/claude-sonnet-4" }],
+            data: [{ id: "z-ai/glm-5.2" }],
           }),
           { status: 200 },
         ),
       log: () => {},
     });
     expect(res.missing.some((m) => m.task === "intent-agent")).toBe(true);
-    expect(getModelConfig("intent-agent").modelId).toBe(
-      "anthropic/claude-sonnet-4",
-    );
+    // Falls back to registry default for intent-agent
+    expect(getModelConfig("intent-agent").modelId).toBe("z-ai/glm-5.2");
   });
 });
+

@@ -61,6 +61,12 @@ export {
   type QuestionExplainResult,
 } from "./explain";
 export {
+  sumUsageCostUsd,
+  sumReportAnalyzeCostUsd,
+  REPORT_COST_TASKS,
+  type UsageCostRow,
+} from "./cost-rollup";
+export {
   allocateCounts,
   planTopicQuotas,
   flattenSyllabusTopics,

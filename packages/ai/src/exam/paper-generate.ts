@@ -155,13 +155,14 @@ export async function validateGeneratedQuestion(opts: {
   }
 
   try {
-    const modelId = getTaskModelId("vision-extract"); // temp 0 style extraction model
+    // Quality gate uses `explain` task (text reasoning), not vision-extract
+    const modelId = getTaskModelId("explain");
     const result = await withAiUsage({
       userId: opts.userId,
-      task: "vision-extract",
+      task: "explain",
       model: modelId,
       run: async () => {
-        const model = getLanguageModel("vision-extract");
+        const model = getLanguageModel("explain");
         return generateObject({
           model,
           schema: qualityGateSchema,

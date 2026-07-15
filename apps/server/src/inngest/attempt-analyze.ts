@@ -10,6 +10,7 @@ import {
   rankWeakTopicsForGap,
   researchExamCutoff,
   scoreAttempt,
+  sumReportAnalyzeCostUsd,
   type AttemptEventLike,
   type EventType,
   type MarkingScheme,
@@ -374,6 +375,22 @@ export const attemptAnalyze = inngest.createFunction(
     );
 
     await step.run("save-report", async () => {
+      // Roll up AI cost for this attempt's analyze window (since report row created)
+      const reportRow = await db.report.findUnique({
+        where: { id: existing.reportId },
+        select: { createdAt: true },
+      });
+      const usageRows = await db.aiUsageLog.findMany({
+        where: {
+          userId,
+          createdAt: reportRow?.createdAt
+            ? { gte: reportRow.createdAt }
+            : undefined,
+        },
+        select: { costUsd: true, task: true },
+      });
+      const totalCostUsd = sumReportAnalyzeCostUsd(usageRows);
+
       await db.report.update({
         where: { id: existing.reportId },
         data: {
@@ -391,6 +408,7 @@ export const attemptAnalyze = inngest.createFunction(
             pacingNote: narrative.pacingNote,
             moraleNote: narrative.moraleNote,
           } as unknown as Prisma.InputJsonValue,
+          totalCostUsd,
           failureReason: null,
         },
       });
