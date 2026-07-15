@@ -452,15 +452,30 @@ export default function ReportPage() {
                   >
                     <div>
                       <span className="font-medium">Q{q.questionIndex + 1}</span>
-                      <span className="ml-2 text-xs uppercase text-[var(--eg-muted-fg)]">
+                      <span
+                        className={cn(
+                          "ml-2 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                          q.status === "correct" &&
+                            "bg-[var(--exam-answered)] text-[var(--exam-answered-fg)]",
+                          q.status === "wrong" &&
+                            "bg-[var(--exam-not-answered)] text-[var(--exam-not-answered-fg)]",
+                          q.status === "skipped" &&
+                            "border border-[var(--exam-not-visited-border)] bg-[var(--exam-not-visited)] text-[var(--exam-not-visited-fg)]",
+                          q.status === "ungraded" &&
+                            "bg-[var(--exam-marked)] text-[var(--exam-marked-fg)]",
+                          !["correct", "wrong", "skipped", "ungraded"].includes(
+                            q.status,
+                          ) && "bg-[var(--eg-muted)] text-[var(--eg-muted-fg)]",
+                        )}
+                      >
                         {q.status}
                       </span>
                       {q.isSlow && (
                         <span className="ml-2 text-xs text-amber-600">slow</span>
                       )}
                       {q.isConfused && (
-                        <span className="ml-2 text-xs text-amber-600">
-                          confused
+                        <span className="ml-2 inline-flex items-center rounded-full bg-[var(--exam-marked)] px-2 py-0.5 text-[10px] font-semibold uppercase text-[var(--exam-marked-fg)]">
+                          review
                         </span>
                       )}
                       <p className="mt-0.5 text-xs text-[var(--eg-muted-fg)]">

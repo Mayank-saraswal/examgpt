@@ -227,11 +227,52 @@ export default function MobileReportScreen() {
               onPress={() => setOpenIdx(open ? null : q.questionIndex)}
               className="rounded-xl border border-zinc-200 p-3 dark:border-zinc-700"
             >
-              <Text className="font-medium text-zinc-900 dark:text-zinc-50">
-                Q{q.questionIndex + 1} · {q.status}
-                {q.isSlow ? " · slow" : ""}
-                {q.isConfused ? " · confused" : ""}
-              </Text>
+              <View className="flex-row flex-wrap items-center gap-2">
+                <Text className="font-medium text-zinc-900 dark:text-zinc-50">
+                  Q{q.questionIndex + 1}
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "700",
+                    textTransform: "uppercase",
+                    overflow: "hidden",
+                    borderRadius: 999,
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    color: "#fff",
+                    backgroundColor:
+                      q.status === "correct"
+                        ? "#22c55e"
+                        : q.status === "wrong"
+                          ? "#ef4444"
+                          : q.status === "skipped"
+                            ? "#9ca3af"
+                            : "#7c3aed",
+                  }}
+                >
+                  {q.status}
+                </Text>
+                {q.isSlow ? (
+                  <Text className="text-xs text-amber-600">slow</Text>
+                ) : null}
+                {q.isConfused ? (
+                  <Text
+                    style={{
+                      fontSize: 10,
+                      fontWeight: "700",
+                      color: "#fff",
+                      backgroundColor: "#7c3aed",
+                      paddingHorizontal: 8,
+                      paddingVertical: 2,
+                      borderRadius: 999,
+                      overflow: "hidden",
+                    }}
+                  >
+                    review
+                  </Text>
+                ) : null}
+              </View>
               <Text className="mt-1 text-xs text-zinc-500">
                 You {q.selectedKey ?? "—"} · Correct {q.correctKey ?? "—"} ·{" "}
                 {q.timeSpentSec}s
