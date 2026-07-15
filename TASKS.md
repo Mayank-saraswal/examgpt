@@ -369,7 +369,7 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - [x] **Exam window** (both clients, mobile = landscape-capable, web = full-screen route):
   - Instructions screen replicating standard NTA instructions incl. palette legend, then START TEST.
   - Question area: text + figures, options as radio list. Buttons: `SAVE & NEXT`, `CLEAR`, `SAVE & MARK FOR REVIEW`, `MARK FOR REVIEW & NEXT`, prev/next; section tabs when sections exist.
-  - Palette (right panel / drawer on phone): number grid with 5 states — Not Visited (gray outline), Not Answered (red), Answered (green), Marked for Review (**amber** — house rule: no purple), Answered & Marked (amber + green dot). Counts legend. Jump-to-question.
+  - Palette (right panel / drawer on phone): number grid with 5 states — Not Visited (gray outline), Not Answered (red), Answered (green), Marked for Review (**amber** — house rule: no purple), Answered & Marked (amber + green dot). Counts legend. Jump-to-question. *(Palette colors superseded by Phase 7.6: exam portal now uses authentic NTA purple for review states.)*
   - Timer: server-authoritative. `attempts.start` returns `endsAt`; client renders countdown from server clock offset; server rejects events/submits after `endsAt` + small grace; client auto-submits at 0; server-side sweep (Inngest cron) force-submits any expired IN_PROGRESS attempts (handles app kill).
   - NTA scoring semantics: "Answered & Marked for Review" COUNTS as answered at submit.
 - [x] Behavior telemetry: emit AttemptEvents per §5 taxonomy; queue locally (sqlite/localStorage), batch-upload every 10s + on blur/background, idempotent `batchId`; survives refresh/app-kill; `attempts.resume` restores full state (answers, palette, remaining time).
@@ -446,6 +446,36 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 
 **Model routing (registry):**
 - [x] Tasks `explain` / `explain-vision`; defaults per §3 table; call-site moves; `compare-report-models.ts`; `Report.totalCostUsd` rollup + unit test (commit `76f2030`).
+
+### Phase 7.6 — NTA-authentic exam portal UI + chat UI upgrade + Firecrawl (added 2026-07-16)
+
+> **Decision change:** the owner wants the exam portal to look exactly like the real NTA CBT (reference screenshots: `C:\Users\USER\Downloads\testwindow.jpeg`, `instructionoftest.jpeg`). This supersedes the amber palette: the exam portal uses **authentic NTA purple** for review states. Purple remains banned everywhere else (AGENTS.md updated). Exam colors live in scoped `exam.*` tokens in `packages/ui-tokens`.
+
+**Exam portal UI — web (`/exam/[attemptId]`):**
+- [x] `exam.*` tokens in ui-tokens: answered green, notAnswered red, notVisited gray, marked purple, markedAnswered purple+green dot, action blue, submit green. Light-only `.exam-portal` shell.
+- [x] Top bar: close (X) + paper title left; candidate avatar + name right.
+- [x] Section tab strip (or single EXAM badge); active highlighted; hover title shows per-section counts.
+- [x] Question area: "Q. N of M", markdown + figures, lettered A–D circular options.
+- [x] Right palette: collapsible; 5 NTA circle states + legend; ALL QUESTIONS / INSTRUCTIONS; green SUBMIT.
+- [x] Bottom action bar: MARK FOR REVIEW + CLEAR | N of M chevrons | SAVE & NEXT blue. Engine/timer/telemetry unchanged.
+- [x] Instructions page: blue section headings, numbered rules, palette legend chips, server-clock/auto-submit/marked notes, centered blue START TEST.
+
+**Exam portal UI — mobile (Expo):**
+- [x] Same `exam.*` language; palette bottom sheet + SUBMIT; sticky bottom actions; N of M in header; landscape-aware; 44px+ targets; full instructions screen.
+
+**Report palette chips:** 
+- [x] Report review list status chips use NTA exam tokens (purple for review). Charts unchanged.
+
+**Chat UI upgrade (web):**
+- [x] Installed shadcn AI: attachment, bubble, marker, message, message-scroller. Rebuilt `/chat` on them; Marker citation deep links + "from the web"; Attachment library affordance. SSE/sync untouched.
+- [x] Mobile chat: bubble styling + citation pills aligned (no new UI kit).
+
+**Firecrawl integration (env-gated `FIRECRAWL_API_KEY`, graceful off):**
+- [x] Server Firecrawl client + unit tests for disabled mode.
+- [x] URL fetch: HTML → Firecrawl markdown → document/ingest (OCR skipped); PDF URLs unchanged. Clear error when key unset.
+- [x] Same path for syllabus/paper HTML URLs via existing `addByUrl` + document/ingest.
+- [x] `WEBSEARCH_BACKEND=perplexity|firecrawl` (default perplexity); firecrawl → search/scrape → synthesize with `explain` into cutoff schema with real URLs.
+- **Live-verify notes (2026-07-16):** Code complete; `bun run check` green (palette property tests included). Side-by-side visual vs `testwindow.jpeg` / `instructionoftest.jpeg` — confirm in browser with Clerk session. Firecrawl live HTML ingest needs `FIRECRAWL_API_KEY` in `.env`.
 
 ### Phase 8 — Deployment + release
 - [x] Server: Dockerfile (`apps/server/Dockerfile`) → **Railway** (`railway.toml`); docs for Neon Postgres, Qdrant Cloud, Inngest Cloud, R2 prod, prod Clerk (incl. admin role + session JWT public_metadata). See `docs/DEPLOYMENT.md`.

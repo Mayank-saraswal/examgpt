@@ -26,7 +26,18 @@ export const cutoffDataSchema = z.object({
 export type CutoffData = z.infer<typeof cutoffDataSchema>;
 
 /**
- * PYQ-only cutoff research via web-search model.
+ * Optional Firecrawl search+scrape for cutoff research (injected by server).
+ * When WEBSEARCH_BACKEND=firecrawl the server passes real scraped hits.
+ */
+export type CutoffWebSearchHit = {
+  url: string;
+  title: string;
+  markdown?: string;
+  description?: string;
+};
+
+/**
+ * PYQ-only cutoff research via web-search model (default) or Firecrawl hits.
  * If sources are missing or model is unsure, returns found:false — never invents cutoffs.
  */
 export async function researchExamCutoff(opts: {
@@ -36,6 +47,11 @@ export async function researchExamCutoff(opts: {
   paperTitle?: string | null;
   score: number;
   maxScore: number;
+  /**
+   * When provided (firecrawl backend), synthesize from these sources with `explain`
+   * instead of calling the web-search model.
+   */
+  firecrawlHits?: CutoffWebSearchHit[];
 }): Promise<CutoffData> {
   const year = opts.paperYear ?? undefined;
   const query = [
@@ -48,6 +64,61 @@ export async function researchExamCutoff(opts: {
     .trim();
 
   try {
+    // Firecrawl path: synthesize from scraped official sources
+    if (opts.firecrawlHits && opts.firecrawlHits.length > 0) {
+      const context = opts.firecrawlHits
+        .map(
+          (h, i) =>
+            `### Source ${i + 1}: ${h.title}\nURL: ${h.url}\n${(h.markdown ?? h.description ?? "").slice(0, 4000)}`,
+        )
+        .join("\n\n");
+      const modelId = getTaskModelId("explain");
+      const objectResult = await withAiUsage({
+        userId: opts.userId,
+        task: "explain",
+        model: modelId,
+        run: async () => {
+          const model = getLanguageModel("explain");
+          return generateObject({
+            model,
+            schema: cutoffDataSchema,
+            temperature: 0,
+            prompt: `From the scraped sources below, extract official ${opts.examType} ${year ?? ""} cutoff marks.
+Rules:
+- Only use numbers that appear in the sources.
+- sourceUrls must be real URLs from the sources list.
+- If cutoffs are not clearly present, set found=false and notFoundReason.
+- Do not invent cutoffs. Student score ${opts.score}/${opts.maxScore} is for verdict context only.
+
+Sources:
+${context.slice(0, 80_000)}`,
+          });
+        },
+      });
+      const data = objectResult.object;
+      if (!data.found || data.sourceUrls.length === 0) {
+        return {
+          found: false,
+          year,
+          exam: opts.examType,
+          cutoffs: [],
+          sourceUrls: opts.firecrawlHits.map((h) => h.url).slice(0, 5),
+          verdict: null,
+          notFoundReason:
+            data.notFoundReason ??
+            "No reliable cutoff numbers found in scraped sources",
+        };
+      }
+      return {
+        ...data,
+        year: data.year ?? year,
+        exam: data.exam ?? opts.examType,
+        sourceUrls: data.sourceUrls.length
+          ? data.sourceUrls
+          : opts.firecrawlHits.map((h) => h.url),
+      };
+    }
+
     const modelId = getTaskModelId("web-search");
     const textResult = await withAiUsage({
       userId: opts.userId,

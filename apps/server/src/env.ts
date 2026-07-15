@@ -45,6 +45,11 @@ const envSchema = z.object({
   ATTEMPT_GRACE_SEC: z.coerce.number().int().nonnegative().default(5),
   /** Syllabus match score 0–1 below which paper needs review (default 0.35). */
   PAPER_SYLLABUS_MATCH_THRESHOLD: z.coerce.number().min(0).max(1).default(0.35),
+
+  /** Optional Firecrawl key for HTML URL scrape (syllabus/paper) and cutoff search. */
+  FIRECRAWL_API_KEY: z.string().optional(),
+  /** Cutoff research: perplexity (default web-search model) | firecrawl (scrape + explain). */
+  WEBSEARCH_BACKEND: z.enum(["perplexity", "firecrawl"]).default("perplexity"),
 });
 
 export type ServerEnv = z.infer<typeof envSchema>;

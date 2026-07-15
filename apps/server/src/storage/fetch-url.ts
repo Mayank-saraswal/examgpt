@@ -7,11 +7,35 @@ export type FetchedFile = {
   sizeBytes: number;
 };
 
+export type FetchedMarkdown = {
+  markdown: string;
+  sourceUrl: string;
+  title?: string;
+  images: string[];
+};
+
+export type FetchedRemote =
+  | { kind: "pdf"; file: FetchedFile }
+  | { kind: "markdown"; content: FetchedMarkdown };
+
 /**
  * Server-side URL fetch for PDF-by-URL ingestion.
- * Size cap, content-type check, timeout; reject HTML.
+ * Size cap, content-type check, timeout; reject HTML unless Firecrawl is available.
  */
 export async function fetchRemotePdf(url: string): Promise<FetchedFile> {
+  const remote = await fetchRemoteUrl(url);
+  if (remote.kind !== "pdf") {
+    throw new Error(
+      "URL returned HTML. Set FIRECRAWL_API_KEY to scrape HTML pages, or paste a direct PDF link.",
+    );
+  }
+  return remote.file;
+}
+
+/**
+ * Fetch a remote document URL: PDF bytes, or HTML → Firecrawl markdown when configured.
+ */
+export async function fetchRemoteUrl(url: string): Promise<FetchedRemote> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -20,7 +44,7 @@ export async function fetchRemotePdf(url: string): Promise<FetchedFile> {
       redirect: "follow",
       headers: {
         "User-Agent": "ExamGPT-Ingest/1.0",
-        Accept: "application/pdf,*/*",
+        Accept: "application/pdf,text/html,*/*",
       },
     });
     if (!res.ok) {
@@ -28,13 +52,33 @@ export async function fetchRemotePdf(url: string): Promise<FetchedFile> {
     }
 
     const contentType = (res.headers.get("content-type") ?? "").toLowerCase();
-    if (
+    const isHtml =
       contentType.includes("text/html") ||
-      contentType.includes("application/xhtml")
-    ) {
-      throw new Error(
-        "URL returned an HTML page, not a PDF. Paste a direct PDF link.",
+      contentType.includes("application/xhtml");
+
+    if (isHtml) {
+      const { firecrawlScrape, FirecrawlDisabledError } = await import(
+        "../firecrawl/client"
       );
+      try {
+        const scraped = await firecrawlScrape(url);
+        return {
+          kind: "markdown",
+          content: {
+            markdown: scraped.markdown,
+            sourceUrl: scraped.sourceUrl,
+            title: scraped.title,
+            images: scraped.images,
+          },
+        };
+      } catch (err) {
+        if (err instanceof FirecrawlDisabledError) {
+          throw new Error(
+            "URL returned an HTML page, not a PDF. Set FIRECRAWL_API_KEY to scrape HTML syllabi/papers, or paste a direct PDF link.",
+          );
+        }
+        throw err;
+      }
     }
 
     const lenHeader = res.headers.get("content-length");
@@ -54,17 +98,44 @@ export async function fetchRemotePdf(url: string): Promise<FetchedFile> {
     // Magic bytes %PDF
     const magic = bytes.subarray(0, 4).toString("utf8");
     if (magic !== "%PDF" && !contentType.includes("pdf")) {
+      // Maybe HTML without content-type — try Firecrawl
+      const head = bytes.subarray(0, 200).toString("utf8").toLowerCase();
+      if (head.includes("<html") || head.includes("<!doctype")) {
+        const { firecrawlScrape, FirecrawlDisabledError } = await import(
+          "../firecrawl/client"
+        );
+        try {
+          const scraped = await firecrawlScrape(url);
+          return {
+            kind: "markdown",
+            content: {
+              markdown: scraped.markdown,
+              sourceUrl: scraped.sourceUrl,
+              title: scraped.title,
+              images: scraped.images,
+            },
+          };
+        } catch (err) {
+          if (err instanceof FirecrawlDisabledError) {
+            throw new Error(
+              "URL does not look like a PDF. Set FIRECRAWL_API_KEY for HTML pages, or use a direct PDF link.",
+            );
+          }
+          throw err;
+        }
+      }
       throw new Error(
         "URL does not look like a PDF (missing %PDF header). Rejecting non-PDF content.",
       );
     }
 
     return {
-      bytes,
-      contentType: contentType.includes("pdf")
-        ? "application/pdf"
-        : "application/pdf",
-      sizeBytes: bytes.length,
+      kind: "pdf",
+      file: {
+        bytes,
+        contentType: "application/pdf",
+        sizeBytes: bytes.length,
+      },
     };
   } finally {
     clearTimeout(timer);

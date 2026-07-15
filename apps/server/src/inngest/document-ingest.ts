@@ -8,7 +8,7 @@ import {
 import { db } from "@examgpt/db";
 import { inngest } from "./client";
 import { splitPdfPages } from "../pdf/split";
-import { fetchRemotePdf } from "../storage/fetch-url";
+import { fetchRemoteUrl } from "../storage/fetch-url";
 import {
   createStorage,
   readLocalObject,
@@ -132,7 +132,29 @@ export const documentIngest = inngest.createFunction(
     const fileBytes = await step.run("fetch-bytes", async () => {
       try {
         if (doc.sourceType === "URL" && doc.sourceUrl) {
-          const fetched = await fetchRemotePdf(doc.sourceUrl);
+          const remote = await fetchRemoteUrl(doc.sourceUrl);
+          if (remote.kind === "markdown") {
+            // HTML via Firecrawl — store markdown, skip OCR later
+            const key = `users/${userId}/url/${documentId}.md`;
+            const mdBuf = Buffer.from(remote.content.markdown, "utf8");
+            await writeLocalObject(key, mdBuf);
+            await db.document.update({
+              where: { id: documentId },
+              data: {
+                fileKey: key,
+                mimeType: "text/markdown",
+                sizeBytes: mdBuf.length,
+                title: remote.content.title ?? doc.title,
+              },
+            });
+            createStorage();
+            return {
+              kind: "markdown" as const,
+              markdown: remote.content.markdown,
+              images: remote.content.images,
+            };
+          }
+          const fetched = remote.file;
           // Persist for later viewer access (R2 or local) — best-effort
           if (!doc.fileKey) {
             const key = `users/${userId}/url/${documentId}.pdf`;
@@ -201,18 +223,30 @@ export const documentIngest = inngest.createFunction(
           // Touch storage so backend is resolved
           createStorage();
           return {
+            kind: "pdf" as const,
             bytesB64: fetched.bytes.toString("base64"),
             mimeType: "application/pdf" as const,
           };
         }
         if (!doc.fileKey) throw new Error("Document has no fileKey or sourceUrl");
         const buf = await downloadDocumentBytes(doc.fileKey);
+        if ((doc.mimeType ?? "").includes("markdown") || doc.fileKey.endsWith(".md")) {
+          return {
+            kind: "markdown" as const,
+            markdown: buf.toString("utf8"),
+            images: [] as string[],
+          };
+        }
         const mime = (doc.mimeType ?? "application/pdf") as
           | "application/pdf"
           | "image/png"
           | "image/jpeg"
           | "image/webp";
-        return { bytesB64: buf.toString("base64"), mimeType: mime };
+        return {
+          kind: "pdf" as const,
+          bytesB64: buf.toString("base64"),
+          mimeType: mime,
+        };
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Failed to fetch file";
         await db.document.update({
@@ -223,10 +257,106 @@ export const documentIngest = inngest.createFunction(
       }
     });
 
+    // Firecrawl HTML path: markdown already extracted — skip PDF split + OCR
+    if ("kind" in fileBytes && fileBytes.kind === "markdown") {
+      const hasImages = fileBytes.images.length > 0;
+      const imgNote = hasImages
+        ? `\n\n${fileBytes.images.map((u) => `![figure](${u})`).join("\n")}`
+        : "";
+      const md = fileBytes.markdown + imgNote;
+      const mdPages: PageInput[] = [{ pageNumber: 1, markdown: md }];
+
+      await step.run("persist-firecrawl-markdown", async () => {
+        await db.documentPage.upsert({
+          where: {
+            documentId_pageNumber: { documentId, pageNumber: 1 },
+          },
+          create: {
+            documentId,
+            pageNumber: 1,
+            ocrStatus: "READY",
+            hasHandwriting: false,
+            hasImages,
+            hasTables: md.includes("|"),
+            classification: "printed",
+            markdown: md,
+          },
+          update: {
+            ocrStatus: "READY",
+            hasImages,
+            hasTables: md.includes("|"),
+            markdown: md,
+            failureReason: null,
+          },
+        });
+        await db.document.update({
+          where: { id: documentId },
+          data: { pageCount: 1, ingestProgress: 70 },
+        });
+      });
+
+      await step.run("chunk-embed-upsert-md", async () => {
+        const chunks = chunkPages(mdPages);
+        await deleteDocumentChunks(userId, documentId);
+        const batchSize = 32;
+        let upserted = 0;
+        for (let i = 0; i < chunks.length; i += batchSize) {
+          const batch = chunks.slice(i, i + batchSize);
+          const vectors = await embedTexts(batch.map((c) => c.text));
+          upserted += await upsertStudyChunks({
+            userId,
+            documentId,
+            title: doc.title,
+            chunks: batch,
+            denseVectors: vectors,
+          });
+        }
+        const before = await db.document.findUnique({
+          where: { id: documentId },
+        });
+        const firstReady = before?.ingestStatus !== "READY";
+        await db.document.update({
+          where: { id: documentId },
+          data: {
+            ingestStatus: "READY",
+            ingestProgress: 100,
+            pageCount: 1,
+            failureReason: null,
+          },
+        });
+        if (firstReady) {
+          await db.user.update({
+            where: { id: userId },
+            data: { pagesUsed: { increment: 1 } },
+          });
+        }
+        logger.info(
+          { documentId, userId, chunks: upserted, via: "firecrawl" },
+          "document/ingest complete (HTML markdown, OCR skipped)",
+        );
+        return { chunks: upserted, pages: 1 };
+      });
+      return { ok: true, documentId, via: "firecrawl-markdown" };
+    }
+
     const pages = await step.run("split-pages", async () => {
-      const bytes = Buffer.from(fileBytes.bytesB64, "base64");
-      if (fileBytes.mimeType.startsWith("image/")) {
-        return [{ pageNumber: 1, bytesB64: fileBytes.bytesB64, mediaType: fileBytes.mimeType }];
+      const pdf = fileBytes as {
+        bytesB64: string;
+        mimeType: string;
+      };
+      const bytes = Buffer.from(pdf.bytesB64, "base64");
+      if (pdf.mimeType.startsWith("image/")) {
+        return [
+          {
+            pageNumber: 1,
+            bytesB64: pdf.bytesB64,
+            mediaType: pdf.mimeType as
+              | "application/pdf"
+              | "image/png"
+              | "image/jpeg"
+              | "image/webp",
+          },
+        ];
       }
       const split = await splitPdfPages(bytes);
       await db.document.update({

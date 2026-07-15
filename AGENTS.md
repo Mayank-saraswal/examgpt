@@ -113,11 +113,17 @@ The complete task list, architecture, schema, and phase plan live in **`TASKS.md
 ## Design system rules (strict)
 
 - **No emoji anywhere in UI** (web, mobile, notifications). Use lucide icons.
-- **No purple/violet/indigo anywhere** — not in the palette, not in charts, not in gradients. This includes the exam palette: real NTA UIs use purple for "Marked for Review"; we use **amber** instead (see TASKS.md exam spec).
+- **No purple/violet/indigo in the general app UI** — not in the palette, not in charts, not in gradients. **ONE scoped exception: the exam portal** (instructions page, CBT exam window, palette legend, and report palette-state chips) replicates the **authentic NTA scheme, which uses purple** for "Marked for Review" / "Answered & Marked for Review". These exam-only colors live in dedicated `exam.*` tokens in `packages/ui-tokens` and must never leak into non-exam screens (see TASKS.md Phase 7.6 exam UI spec).
 - **No glassmorphism / "liquid glass" / frosted blur panels.** Flat, clean, high-contrast surfaces with subtle borders and shadows.
 - Palette: neutral slate/zinc base; primary **blue** (#2563eb family); success green, error red, warning amber. Define once as Tailwind theme tokens in `packages/ui` config and reuse in both apps. Light + dark mode from day one (`next-themes` web, RN color scheme mobile).
 - shadcn/ui components on web; react-native-reusables on mobile. Do not hand-roll a component that either library provides. Keep component code copied into the repo (that's the shadcn model) under `src/components/ui`.
 - Hindi/Hinglish users: UI copy in simple English (v1), but all text goes through a `t()` copy module from day one so localization is a string-file change later.
+- **AI chat UI (web) uses the official shadcn AI components** — `attachment`, `bubble`, `marker`, `message`, `message-scroller` — installed via `bunx --bun shadcn@latest add <component>`. Do not hand-roll chat bubbles/scrollers on web; extend the installed components (citation pills, web-source badges) instead. Mobile mirrors the same visual language with react-native-reusables.
+
+## Web content extraction (Firecrawl)
+
+- `FIRECRAWL_API_KEY` is **optional and env-gated**. Every Firecrawl call site must degrade gracefully when the key is absent (feature hidden or fallback used) — never a hard dependency, never a boot failure.
+- Use Firecrawl ONLY where it genuinely beats what we have: (1) ingesting **HTML** syllabus/question-paper URLs (converts pages to clean markdown, skips OCR entirely); (2) cutoff research via scrape of official/verifiable sources when `WEBSEARCH_BACKEND=firecrawl` (default stays `perplexity`). Direct-PDF URLs keep the existing fetch path; PDFs/scans still require OCR — Firecrawl does not replace it.
 
 ## API and data rules
 

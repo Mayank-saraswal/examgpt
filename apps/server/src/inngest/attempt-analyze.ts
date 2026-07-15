@@ -361,6 +361,32 @@ export const attemptAnalyze = inngest.createFunction(
           notFoundReason: "Cutoff comparison only for PYQ papers",
         };
       }
+      const backend = (
+        process.env.WEBSEARCH_BACKEND ?? "perplexity"
+      ).toLowerCase();
+      let firecrawlHits:
+        | { url: string; title: string; markdown?: string }[]
+        | undefined;
+      if (backend === "firecrawl") {
+        try {
+          const { firecrawlSearch, firecrawlConfigured } = await import(
+            "../firecrawl/client"
+          );
+          if (!firecrawlConfigured()) {
+            logger.warn(
+              "WEBSEARCH_BACKEND=firecrawl but FIRECRAWL_API_KEY unset — falling back to perplexity/web-search model",
+            );
+          } else {
+            const q = `${examProfile?.type ?? "NEET"} ${attempt.test.paperYear ?? ""} exam cutoff marks official NTA`;
+            firecrawlHits = await firecrawlSearch(q, {
+              limit: 5,
+              scrape: true,
+            });
+          }
+        } catch (err) {
+          logger.warn({ err }, "firecrawl cutoff search failed — fallback");
+        }
+      }
       return researchExamCutoff({
         userId,
         examType: examProfile?.type ?? "NEET",
@@ -368,6 +394,7 @@ export const attemptAnalyze = inngest.createFunction(
         paperTitle: attempt.test.title,
         score: scoredResponses.score,
         maxScore: scoredResponses.maxScore,
+        firecrawlHits,
       });
     });
 
