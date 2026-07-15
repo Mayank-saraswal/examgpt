@@ -122,10 +122,12 @@ export function planTopicQuotas(opts: {
     }
   }
 
+  const presentBuckets = (["WEAK", "MODERATE", "STRONG"] as const).filter(
+    (b) => byBucket[b].length > 0,
+  );
+  const weights = renormalizeAutoWeights([...presentBuckets]);
   const bucketTotals = allocateCounts(
-    (["WEAK", "MODERATE", "STRONG"] as const)
-      .filter((b) => byBucket[b].length > 0)
-      .map((b) => ({ key: b, weight: AUTO_WEIGHTS[b] })),
+    presentBuckets.map((b) => ({ key: b, weight: weights[b] })),
     n,
   );
 
@@ -186,4 +188,51 @@ export function weakTopicShare(plan: TopicQuota[]): number {
     .filter((p) => p.bucket === "WEAK")
     .reduce((s, p) => s + p.count, 0);
   return weak / total;
+}
+
+/**
+ * Merge report verdicts with question_bank accuracy.
+ * Low bank accuracy (<0.45, ≥2 attempts) → WEAK; high (≥0.75, ≥2) → STRONG.
+ * Report WEAK wins when present.
+ */
+export function mergeVerdictsWithBankAccuracy(
+  reportVerdicts: TopicVerdictRow[],
+  bankAccuracy: Map<string, { accuracy: number; total: number }>,
+): TopicVerdictRow[] {
+  const map = new Map<string, TopicVerdictLite>();
+  for (const [topic, stats] of bankAccuracy) {
+    if (stats.total < 2) continue;
+    if (stats.accuracy < 0.45) map.set(topic, "WEAK");
+    else if (stats.accuracy >= 0.75) map.set(topic, "STRONG");
+    else map.set(topic, "MODERATE");
+  }
+  for (const v of reportVerdicts) {
+    // Report WEAK always overrides; otherwise keep bank unless report is stronger signal
+    if (v.verdict === "WEAK" || !map.has(v.topic)) {
+      map.set(v.topic, v.verdict);
+    } else if (v.verdict === "STRONG" && map.get(v.topic) !== "WEAK") {
+      map.set(v.topic, "STRONG");
+    }
+  }
+  return [...map.entries()].map(([topic, verdict]) => ({ topic, verdict }));
+}
+
+/**
+ * Redistribute auto weights when some buckets have zero topics.
+ * e.g. only WEAK present → 100% weak; WEAK+STRONG → renormalize 50/20 → ~71/29.
+ */
+export function renormalizeAutoWeights(
+  present: TopicVerdictLite[],
+): Record<TopicVerdictLite, number> {
+  const base = { ...AUTO_WEIGHTS };
+  const active = present.filter((b) => base[b] > 0);
+  if (active.length === 0) {
+    return { WEAK: 0, MODERATE: 1, STRONG: 0 };
+  }
+  const sum = active.reduce((s, b) => s + base[b], 0);
+  return {
+    WEAK: active.includes("WEAK") ? base.WEAK / sum : 0,
+    MODERATE: active.includes("MODERATE") ? base.MODERATE / sum : 0,
+    STRONG: active.includes("STRONG") ? base.STRONG / sum : 0,
+  };
 }

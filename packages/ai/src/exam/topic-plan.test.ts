@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   allocateCounts,
   flattenSyllabusTopics,
+  mergeVerdictsWithBankAccuracy,
   planTopicQuotas,
+  renormalizeAutoWeights,
   weakTopicShare,
 } from "./topic-plan";
 
@@ -62,5 +64,52 @@ describe("flattenSyllabusTopics", () => {
       ],
     });
     expect(topics).toEqual(["Laws of Motion", "Gravitation"]);
+  });
+});
+
+describe("renormalizeAutoWeights missing categories", () => {
+  it("puts 100% on sole present bucket", () => {
+    const w = renormalizeAutoWeights(["WEAK"]);
+    expect(w.WEAK).toBeCloseTo(1);
+    expect(w.MODERATE).toBe(0);
+    expect(w.STRONG).toBe(0);
+  });
+
+  it("renormalizes WEAK+STRONG without MODERATE", () => {
+    const w = renormalizeAutoWeights(["WEAK", "STRONG"]);
+    expect(w.WEAK + w.STRONG).toBeCloseTo(1);
+    expect(w.WEAK).toBeGreaterThan(w.STRONG);
+    expect(w.MODERATE).toBe(0);
+  });
+});
+
+describe("mergeVerdictsWithBankAccuracy", () => {
+  it("marks low bank accuracy as WEAK; report WEAK wins", () => {
+    const bank = new Map([
+      ["Thermo", { accuracy: 0.2, total: 5 }],
+      ["Optics", { accuracy: 0.9, total: 4 }],
+    ]);
+    const merged = mergeVerdictsWithBankAccuracy(
+      [{ topic: "Optics", verdict: "WEAK" }],
+      bank,
+    );
+    const byTopic = Object.fromEntries(merged.map((m) => [m.topic, m.verdict]));
+    expect(byTopic.Thermo).toBe("WEAK");
+    expect(byTopic.Optics).toBe("WEAK");
+  });
+});
+
+describe("planTopicQuotas with only weak present", () => {
+  it("still fills all seats", () => {
+    const plan = planTopicQuotas({
+      questionCount: 10,
+      mode: "auto",
+      topicVerdicts: [
+        { topic: "A", verdict: "WEAK" },
+        { topic: "B", verdict: "WEAK" },
+      ],
+    });
+    expect(plan.reduce((s, p) => s + p.count, 0)).toBe(10);
+    expect(weakTopicShare(plan)).toBe(1);
   });
 });

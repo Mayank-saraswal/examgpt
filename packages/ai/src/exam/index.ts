@@ -65,6 +65,8 @@ export {
   planTopicQuotas,
   flattenSyllabusTopics,
   weakTopicShare,
+  mergeVerdictsWithBankAccuracy,
+  renormalizeAutoWeights,
   type TopicVerdictLite,
   type TopicVerdictRow,
   type TopicQuota,
@@ -80,3 +82,8 @@ export {
   type GeneratedQuestion,
   type QualityGateResult,
 } from "./paper-generate";
+export {
+  runQualityRegenLoop,
+  type QualityLoopDeps,
+  type QualityLoopResult,
+} from "./quality-loop";
