@@ -20,6 +20,10 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: monorepoRoot,
   },
+  images: {
+    // Local marketing screenshots in /public
+    unoptimized: process.env.NODE_ENV === "development",
+  },
 };
 
 export default nextConfig;

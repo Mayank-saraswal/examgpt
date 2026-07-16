@@ -55,7 +55,7 @@ export default function HomeScreen() {
 
   if (!auth.isLoaded || !welcomeChecked) {
     return (
-      <View className="flex-1 items-center justify-center bg-white dark:bg-slate-950">
+      <View className="flex-1 items-center justify-center bg-slate-50 dark:bg-slate-950">
         <ActivityIndicator color="#2563eb" />
       </View>
     );
@@ -63,7 +63,7 @@ export default function HomeScreen() {
 
   if (!auth.isSignedIn) {
     return (
-      <View className="flex-1 items-center justify-center bg-white px-6 dark:bg-slate-950">
+      <View className="flex-1 items-center justify-center bg-slate-50 px-6 dark:bg-slate-950">
         <View className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
           <Text className="text-sm font-medium text-primary-600">ExamGPT</Text>
           <Text className="mt-1 text-2xl font-semibold text-slate-900 dark:text-slate-50">
@@ -87,10 +87,15 @@ export default function HomeScreen() {
 
   const d = dash.data;
   const firstName = d?.firstName ?? me.data?.name?.split(" ")[0] ?? "Student";
+  const testsTaken = d?.scoreTrend.length ?? 0;
+  const avgScore =
+    testsTaken > 0 && d
+      ? Math.round(d.scoreTrend.reduce((s, r) => s + r.pct, 0) / testsTaken)
+      : null;
 
   return (
     <ScrollView
-      className="flex-1 bg-white dark:bg-slate-950"
+      className="flex-1 bg-slate-50 dark:bg-slate-950"
       contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
     >
       <Text className="text-sm font-medium text-primary-600">Home</Text>
@@ -98,10 +103,9 @@ export default function HomeScreen() {
         Hi, {firstName}
       </Text>
       <Text className="mt-1 text-sm text-slate-500">
-        {d?.examType ?? "—"}
-        {d?.studyStreak != null ? ` · ${d.studyStreak} day streak` : ""}
+        {d?.examType ?? "Set your exam in onboarding"}
         {d?.daysToExam != null && d.daysToExam > 0
-          ? ` · ${d.daysToExam}d to target`
+          ? ` · ${d.daysToExam} days to target`
           : ""}
       </Text>
 
@@ -109,10 +113,49 @@ export default function HomeScreen() {
         <ActivityIndicator color="#2563eb" className="mt-8" />
       )}
 
+      {dash.isError && (
+        <View className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/30">
+          <Text className="text-sm text-red-800 dark:text-red-200">
+            Could not load dashboard. Pull to refresh or try again later.
+          </Text>
+          <Pressable onPress={() => void dash.refetch()} className="mt-2">
+            <Text className="text-sm font-medium text-blue-600">Retry</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {d && (
+        <View className="mt-6 flex-row flex-wrap gap-3">
+          <StatTile
+            label="Streak"
+            value={`${d.studyStreak}`}
+            unit="days"
+          />
+          <StatTile label="Tests" value={`${testsTaken}`} unit="scored" />
+          <StatTile
+            label="Avg score"
+            value={avgScore != null ? `${avgScore}` : "—"}
+            unit={avgScore != null ? "%" : ""}
+          />
+          <StatTile
+            label="To exam"
+            value={
+              d.daysToExam != null && d.daysToExam > 0
+                ? `${d.daysToExam}`
+                : "—"
+            }
+            unit="days"
+          />
+        </View>
+      )}
+
       {d?.isNewUser && d.onboarded && d.platformPapers.length > 0 && (
-        <View className="mt-6 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
+        <View className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <Text className="text-lg font-semibold text-slate-900 dark:text-slate-50">
             Try a real past paper now
+          </Text>
+          <Text className="mt-1 text-sm text-slate-500">
+            Published previous-year papers — no upload wait.
           </Text>
           {d.platformPapers.slice(0, 3).map((p) => (
             <Pressable
@@ -132,16 +175,38 @@ export default function HomeScreen() {
       )}
 
       {d?.isNewUser && d.onboarded && d.platformPapers.length === 0 && (
-        <View className="mt-6 rounded-xl border border-slate-200 p-4 dark:border-slate-800">
-          <Text className="text-lg font-semibold">Get started</Text>
-          <Text className="mt-1 text-sm text-slate-500">
-            Upload notes · Ask tutor · Take a paper
+        <View className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <Text className="text-lg font-semibold text-slate-900 dark:text-slate-50">
+            Get started
           </Text>
-          <Text className="mt-3 text-sm">
+          <Text className="mt-1 text-sm text-slate-500">
+            Three steps driven by your real activity.
+          </Text>
+          <Text className="mt-3 text-sm text-slate-700 dark:text-slate-300">
             Notes: {d.checklist.uploadNotes ? "done" : "todo"} · Tutor:{" "}
             {d.checklist.askTutor ? "done" : "todo"} · Paper:{" "}
             {d.checklist.takePaper ? "done" : "todo"}
           </Text>
+        </View>
+      )}
+
+      {d && !d.isNewUser && d.recommendedNext && (
+        <View className="mt-6 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+          <Text className="text-sm font-medium text-blue-600">
+            Recommended next
+          </Text>
+          <Text className="mt-1 text-base font-semibold text-slate-900 dark:text-slate-50">
+            {d.recommendedNext.topic}
+          </Text>
+          <Text className="mt-1 text-sm text-slate-500">
+            {d.recommendedNext.action}
+          </Text>
+          <Pressable
+            onPress={() => router.push("/chat")}
+            className="mt-3 self-start rounded-md bg-blue-600 px-3 py-2"
+          >
+            <Text className="text-sm font-medium text-white">Practice in chat</Text>
+          </Pressable>
         </View>
       )}
 
@@ -155,12 +220,64 @@ export default function HomeScreen() {
               <Pressable
                 key={t}
                 onPress={() => router.push("/chat")}
-                className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1"
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 dark:border-slate-700 dark:bg-slate-900"
               >
-                <Text className="text-xs text-amber-900">{t}</Text>
+                <Text className="text-xs font-medium text-slate-800 dark:text-slate-100">
+                  {t}
+                </Text>
               </Pressable>
             ))}
           </View>
+        </View>
+      )}
+
+      {d && (d.recentDocuments.length > 0 || d.recentChats.length > 0) && (
+        <View className="mt-6 gap-4">
+          {d.recentDocuments.length > 0 && (
+            <View className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <Text className="font-semibold text-slate-900 dark:text-slate-50">
+                Recent documents
+              </Text>
+              {d.recentDocuments.slice(0, 3).map((doc) => (
+                <Pressable
+                  key={doc.id}
+                  onPress={() => router.push(`/library/${doc.id}`)}
+                  className="mt-2 flex-row items-center justify-between"
+                >
+                  <Text
+                    className="flex-1 truncate text-sm text-slate-700 dark:text-slate-200"
+                    numberOfLines={1}
+                  >
+                    {doc.title}
+                  </Text>
+                  <Text className="ml-2 text-[10px] font-semibold uppercase text-blue-600">
+                    {doc.ingestStatus}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {d.recentChats.length > 0 && (
+            <View className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
+              <Text className="font-semibold text-slate-900 dark:text-slate-50">
+                Recent chats
+              </Text>
+              {d.recentChats.slice(0, 3).map((c) => (
+                <Pressable
+                  key={c.id}
+                  onPress={() => router.push(`/chat/${c.id}`)}
+                  className="mt-2"
+                >
+                  <Text
+                    className="text-sm text-slate-700 dark:text-slate-200"
+                    numberOfLines={1}
+                  >
+                    {c.title || "Chat"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
       )}
 
@@ -181,5 +298,27 @@ export default function HomeScreen() {
         />
       </View>
     </ScrollView>
+  );
+}
+
+function StatTile({
+  label,
+  value,
+  unit,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+}) {
+  return (
+    <View className="min-w-[45%] flex-1 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+      <Text className="text-xs text-slate-500">{label}</Text>
+      <Text className="mt-1 text-xl font-semibold tabular-nums text-slate-900 dark:text-slate-50">
+        {value}
+        {unit ? (
+          <Text className="text-xs font-normal text-slate-500"> {unit}</Text>
+        ) : null}
+      </Text>
+    </View>
   );
 }

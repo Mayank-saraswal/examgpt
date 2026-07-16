@@ -490,12 +490,13 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 
 ### Phase 7.8 — Design overhaul (landing + app shell) (added 2026-07-16)
 
-- [ ] Landing redesign (Linear/Vercel/Stripe-inspired): sticky nav, hero with real NTA exam screenshot in browser frame, social-proof strip, 4 alternating feature sections with UI screenshots, how-it-works, exam chips, FAQ, final CTA, footer. **No purple** on landing; blue accent only; no emoji; no glass; lucide only; light+dark polished. Prefer official shadcn blocks as base.
-- [ ] Lighthouse 90+ performance + SEO on production build of landing; record scores here.
-- [ ] App shell (web, all signed-in pages): collapsible left sidebar (Dashboard, Chat, Library, Tests, Reports, Admin-if-admin) + topbar (breadcrumb, theme toggle, avatar menu with sign-out + privacy/terms). Built from shadcn sidebar/dashboard blocks.
-- [ ] Dashboard content redesign: stat cards (streak Flame lucide, tests taken, avg score %, days to exam); performance chart fixed (y ≥ 0, domain clamped, date + test name x-axis, ui-tokens colors); weak topics → prefilled chat; Recommended Next card with CTA; recent docs/chats two-column; Privacy removed from quick actions.
-- [ ] Slate token backgrounds (not pure black); empty/loading/error states; light+dark; mobile viewport; mobile home hierarchy mirrored.
-- [ ] Live-verify: side-by-side landing screenshots + Lighthouse numbers; shell navigation on all signed-in routes; chart never goes below zero.
+- [x] Landing redesign (Linear/Vercel/Stripe-inspired): sticky nav, hero with real NTA exam screenshot (`/exam-window.jpeg`) in browser frame, social-proof strip, 4 alternating feature sections, how-it-works, exam chips, FAQ, final CTA, footer. No purple; blue accent; lucide only; light+dark.
+- [ ] Lighthouse 90+ performance + SEO on production build of landing; record scores here. *(Run after `bun run --filter @examgpt/web build`.)*
+- [x] App shell (web, `(app)` route group): collapsible sidebar (Dashboard, Chat, Library, Tests, Reports, Admin-if-admin) + topbar (breadcrumb, theme toggle, UserButton with Privacy/Terms). Privacy/Terms also in sidebar footer. Reports list page at `/reports`.
+- [x] Dashboard redesign: stat cards (Flame lucide streak, tests taken, avg %, days to exam); chart y-domain ≥ 0, date+name x-axis, blue stroke; weak topics → chat; Recommended Next card; docs/chats two-column; Privacy removed from quick actions.
+- [x] Slate backgrounds (not pure black); async states preserved; exam routes stay full-bleed outside shell.
+- [x] Mobile home hierarchy: stat tiles (streak/tests/avg/days), recommended next, weak topics, recent docs/chats, empty/loading/error states; slate bg (not pure black).
+- [ ] Live-verify: landing visual + Lighthouse; shell on all signed-in routes; chart never negative.
 
 ### Phase 8 — Deployment + release (**DigitalOcean App Platform**, region **blr** / Bengaluru)
 - [x] Server Dockerfile (`apps/server/Dockerfile`) exists; **target host: DigitalOcean App Platform** (not Railway). Spec: `.do/app.yaml` (server + web in `blr`).
