@@ -1,0 +1,125 @@
+# DigitalOcean App Platform — ExamGPT (region blr / Bengaluru)
+# Docs: https://docs.digitalocean.com/products/app-platform/
+# Deploy after OWNER provides Neon (ap-southeast-1), Qdrant SG, Inngest, R2 credentials.
+# Test domains: examgpt.mayanksaraswal.in (web), examgpt-api.mayanksaraswal.in (api)
+
+name: examgpt
+region: blr
+
+services:
+  - name: server
+    dockerfile_path: apps/server/Dockerfile
+    source_dir: /
+    http_port: 4000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    health_check:
+      http_path: /health
+      initial_delay_seconds: 30
+      period_seconds: 15
+      timeout_seconds: 5
+      success_threshold: 1
+      failure_threshold: 3
+    routes:
+      - path: /
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: STORAGE_BACKEND
+        value: r2
+      # Secrets — set in DO dashboard / MCP (do not commit values)
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: CLERK_SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: CLERK_PUBLISHABLE_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: CLERK_WEBHOOK_SIGNING_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: ADMIN_USER_IDS
+        scope: RUN_TIME
+        type: SECRET
+      - key: OPENAI_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: GOOGLE_GENERATIVE_AI_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: OPENROUTER_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: QDRANT_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: QDRANT_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: INNGEST_EVENT_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: INNGEST_SIGNING_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: R2_ACCOUNT_ID
+        scope: RUN_TIME
+        type: SECRET
+      - key: R2_ACCESS_KEY_ID
+        scope: RUN_TIME
+        type: SECRET
+      - key: R2_SECRET_ACCESS_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: R2_BUCKET
+        scope: RUN_TIME
+        type: SECRET
+      - key: R2_PUBLIC_BASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: CORS_ORIGINS
+        value: "https://examgpt.mayanksaraswal.in,http://localhost:3000"
+      - key: FIRECRAWL_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: MEM0_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+
+  - name: web
+    # Build monorepo Next app — adjust build_command if using turbo filter
+    environment_slug: node-js
+    source_dir: /
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: basic-xxs
+    build_command: bun install && bun run --filter @examgpt/web build
+    run_command: bun run --filter @examgpt/web start
+    routes:
+      - path: /
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: "https://examgpt-api.mayanksaraswal.in"
+      - key: NEXT_PUBLIC_SITE_URL
+        value: "https://examgpt.mayanksaraswal.in"
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: CLERK_SECRET_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: NEXT_PUBLIC_CLERK_SIGN_IN_URL
+        value: /sign-in
+      - key: NEXT_PUBLIC_CLERK_SIGN_UP_URL
+        value: /sign-up
+
+# After first deploy via DO MCP/dashboard:
+# 1. Attach domains examgpt.mayanksaraswal.in → web, examgpt-api.mayanksaraswal.in → server
+# 2. OWNER adds CNAMEs DO provides
+# 3. Register Inngest: https://examgpt-api.mayanksaraswal.in/api/inngest

@@ -50,7 +50,7 @@ Full credential detail lives in [`DEPLOYMENT.md`](./DEPLOYMENT.md). Update this 
 
 | # | Who | Item | Status |
 |---|-----|------|--------|
-| D1 | AGENT | `.do/app.yaml` — server (Dockerfile) + web (Next.js), region blr | [ ] |
+| D1 | AGENT | `.do/app.yaml` — server (Dockerfile) + web (Next.js), region blr | [x] |
 | D2 | AGENT | Env secrets per component (`STORAGE_BACKEND=r2`, CORS, API URLs, Clerk, AI, Qdrant, Neon, Inngest, ADMIN_USER_IDS, …) | [ ] |
 | D3 | AGENT | Create/update DO app via MCP; deploy; verify `GET /health` → `postgres:up` + `qdrant:up` | [ ] |
 | D4 | AGENT | Domains: web `examgpt.mayanksaraswal.in`, API `examgpt-api.mayanksaraswal.in` | [ ] |
