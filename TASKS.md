@@ -488,15 +488,26 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - [x] Dashboard revamp: greeting, exam badge, days-to-exam, streak (IST unit-tested), weak topics → chat, recommended next, recent docs with ingest pills, recent chats, quick actions.
 - **Live-verify (2026-07-16):** `bun run check` green (streak 7 tests). Browser Lighthouse 90+ on `next build` landing not re-run this session — re-verify with `bun run --filter @examgpt/web build && start` + Lighthouse. Wizard resume: abandon mid-step → login → same step. Dashboard empty-vs-platform card depends on published PLATFORM tests.
 
-### Phase 8 — Deployment + release
-- [x] Server: Dockerfile (`apps/server/Dockerfile`) → **Railway** (`railway.toml`); docs for Neon Postgres, Qdrant Cloud, Inngest Cloud, R2 prod, prod Clerk (incl. admin role + session JWT public_metadata). See `docs/DEPLOYMENT.md`.
-- [x] Web: Vercel wiring documented; env list in deploy guide (custom domain TBD with credentials).
-- [x] Mobile: EAS build profiles (`apps/mobile/eas.json` dev/preview/prod); deep-link scheme + intent filters in `app.json`; store checklist in deploy docs. Icons paths set (add assets before store submit). TestFlight/Play submit needs store credentials.
-- [x] Staging + migration flow: `.github/workflows/ci.yml` runs `prisma migrate deploy`; staging job stub ready for `STAGING_DATABASE_URL`.
-- [x] New env in `.env.example` + `docs/DEPLOYMENT.md`: `ADMIN_USER_IDS`, `AI_MODEL_EXPLAIN`, `AI_MODEL_EXPLAIN_VISION`, Sentry DSNs, rate limits, `STORAGE_BACKEND=r2`.
-- **NOTE (R2):** Before any production deploy, re-verify R2 S3 credentials with `bun run scripts/r2-diagnose.ts` (expects PutObject/GetObject/HeadBucket OK). Do not ship with untested keys — prior Access Key/Secret pairs returned HTTP 403 AccessDenied despite a valid bucket and CORS. Production must use `STORAGE_BACKEND=r2` with working keys; local `/storage/local` is dev-only and must never mount in production.
-- [ ] **Live deploy blocked on credentials** — see credential checklist at end of `docs/DEPLOYMENT.md`. Agent stops until you provide them step-by-step.
-- **Acceptance:** A fresh phone installs from TestFlight/internal track, signs up with Google or email OTP, and completes the full loop against production infra.
+### Phase 7.8 — Design overhaul (landing + app shell) (added 2026-07-16)
+
+- [ ] Landing redesign (Linear/Vercel/Stripe-inspired): sticky nav, hero with real NTA exam screenshot in browser frame, social-proof strip, 4 alternating feature sections with UI screenshots, how-it-works, exam chips, FAQ, final CTA, footer. **No purple** on landing; blue accent only; no emoji; no glass; lucide only; light+dark polished. Prefer official shadcn blocks as base.
+- [ ] Lighthouse 90+ performance + SEO on production build of landing; record scores here.
+- [ ] App shell (web, all signed-in pages): collapsible left sidebar (Dashboard, Chat, Library, Tests, Reports, Admin-if-admin) + topbar (breadcrumb, theme toggle, avatar menu with sign-out + privacy/terms). Built from shadcn sidebar/dashboard blocks.
+- [ ] Dashboard content redesign: stat cards (streak Flame lucide, tests taken, avg score %, days to exam); performance chart fixed (y ≥ 0, domain clamped, date + test name x-axis, ui-tokens colors); weak topics → prefilled chat; Recommended Next card with CTA; recent docs/chats two-column; Privacy removed from quick actions.
+- [ ] Slate token backgrounds (not pure black); empty/loading/error states; light+dark; mobile viewport; mobile home hierarchy mirrored.
+- [ ] Live-verify: side-by-side landing screenshots + Lighthouse numbers; shell navigation on all signed-in routes; chart never goes below zero.
+
+### Phase 8 — Deployment + release (**DigitalOcean App Platform**, region **blr** / Bengaluru)
+- [x] Server Dockerfile (`apps/server/Dockerfile`) exists; **target host: DigitalOcean App Platform** (not Railway). Spec: `.do/app.yaml` (server + web in `blr`).
+- [x] Web: Next.js build as DO component (not Vercel for this deploy path). Custom domain: `examgpt.mayanksaraswal.in` (web), `examgpt-api.mayanksaraswal.in` (API).
+- [x] Mobile: EAS profiles + deep links still as documented; store submit at real launch.
+- [x] Staging/CI: `.github/workflows/ci.yml` with `prisma migrate deploy`.
+- [x] Env docs: `.env.example` + `docs/DEPLOYMENT.md` + `docs/LAUNCH.md`.
+- **NOTE (R2):** Before deploy, re-verify with `bun run scripts/r2-diagnose.ts` (PutObject/GetObject/HeadBucket OK). `STORAGE_BACKEND=r2` required in prod. STOP if R2 diagnose fails.
+- **External services (OWNER creates first, Singapore preferred for Neon/Qdrant):** Neon AWS `ap-southeast-1`, Qdrant Cloud Singapore, Inngest Cloud, R2 prod bucket. Agent stops and asks for each credential.
+- [ ] Live DO deploy in `blr`; `/health` → postgres:up + qdrant:up; DNS CNAMEs confirmed; Inngest sync; smoke pass recorded in `docs/LAUNCH.md`.
+- [ ] Production Clerk instance switch at real launch (test deploy may use Clerk **dev** keys).
+- **Acceptance:** Fresh phone (later) + web smoke on `examgpt.mayanksaraswal.in` completes signup → onboard → upload → chat.
 
 ---
 

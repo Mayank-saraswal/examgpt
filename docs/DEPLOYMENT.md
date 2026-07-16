@@ -2,18 +2,20 @@
 
 Deploy order matters. Stop at each **Credentials needed** block and provide values before the agent continues.
 
-## Architecture (prod)
+## Architecture (prod / test subdomain)
 
 | Piece | Host | Notes |
 |---|---|---|
-| API (`apps/server`) | **Railway** (Docker) | Express + tRPC + Inngest serve |
-| Web (`apps/web`) | **Vercel** | Next.js 16 |
+| API (`apps/server`) | **DigitalOcean App Platform** (`blr`) | Docker · health `/health` · `examgpt-api.mayanksaraswal.in` |
+| Web (`apps/web`) | **DigitalOcean App Platform** (`blr`) | Next.js build · `examgpt.mayanksaraswal.in` |
 | Mobile | **EAS** → TestFlight + Play internal | Expo |
-| Postgres | **Neon** | `prisma migrate deploy` in CI / release |
-| Vectors | **Qdrant Cloud** | collections asserted at boot |
-| Jobs | **Inngest Cloud** | sync URL → Railway `/api/inngest` |
+| Postgres | **Neon** (prefer **AWS ap-southeast-1** Singapore) | `prisma migrate deploy` |
+| Vectors | **Qdrant Cloud** (prefer Singapore) | collections asserted at boot |
+| Jobs | **Inngest Cloud** | sync → `https://examgpt-api…/api/inngest` |
 | Files | **Cloudflare R2** | `STORAGE_BACKEND=r2` only in prod |
-| Auth | **Clerk** production instance | + admin role setup |
+| Auth | Clerk **dev** keys OK for test DO deploy; **prod** Clerk at real launch | + admin role setup |
+
+See also **[`LAUNCH.md`](./LAUNCH.md)** for the ordered owner/agent checklist.
 
 ---
 

@@ -53,10 +53,11 @@ bun run check   # typecheck + lint + test
 
 ## Deployment
 
-See **[`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)** (Phase 8).
+See **[`docs/DEPLOYMENT.md`](./docs/DEPLOYMENT.md)** and the ordered **[`docs/LAUNCH.md`](./docs/LAUNCH.md)** checklist (Phase 8).
 
-- API: `apps/server/Dockerfile` → Railway (`railway.toml`)
-- Web: Vercel
+- **Host:** DigitalOcean App Platform, region **blr** (Bengaluru) — `.do/app.yaml`
+- API: `apps/server/Dockerfile` → DO service
+- Web: Next.js → DO service (`examgpt.mayanksaraswal.in` test domain)
 - Mobile: EAS profiles in `apps/mobile/eas.json`
 - CI: `.github/workflows/ci.yml` (`bun run check` + `prisma migrate deploy`)
 
