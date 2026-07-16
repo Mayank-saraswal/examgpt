@@ -19,11 +19,20 @@ export const updateProfileInput = z.object({
   age: z.number().int().min(10).max(100).optional(),
 });
 
+export const onboardingStepSchema = z.enum([
+  "profile",
+  "exam",
+  "targets",
+  "notifications",
+  "done",
+]);
+
 export const setExamInput = z
   .object({
     type: examTypeSchema,
     customName: z.string().min(1).max(120).optional(),
     targetYear: z.number().int().min(2020).max(2040).optional(),
+    targetScore: z.number().int().min(0).max(1000).optional(),
   })
   .superRefine((val, ctx) => {
     if (val.type === "OTHER" && !val.customName?.trim()) {
@@ -34,6 +43,18 @@ export const setExamInput = z
       });
     }
   });
+
+export const saveOnboardingProgressInput = z.object({
+  step: onboardingStepSchema,
+  name: z.string().min(1).max(120).optional(),
+  age: z.number().int().min(10).max(100).optional(),
+  examType: examTypeSchema.optional(),
+  customName: z.string().min(1).max(120).optional(),
+  targetYear: z.number().int().min(2020).max(2040).optional().nullable(),
+  targetScore: z.number().int().min(0).max(1000).optional().nullable(),
+  syllabusUrl: z.string().url().max(2000).optional(),
+  syllabusTitle: z.string().min(1).max(200).optional(),
+});
 
 export const MAX_PDF_BYTES = 100 * 1024 * 1024; // 100MB
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024; // 20MB

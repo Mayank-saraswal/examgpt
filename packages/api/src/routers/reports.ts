@@ -1,6 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { computeStudyStreak } from "../streak";
 
 export const reportsRouter = createTRPCRouter({
   get: protectedProcedure
@@ -79,11 +80,18 @@ export const reportsRouter = createTRPCRouter({
     }),
 
   /**
-   * Dashboard aggregates: score trend + current weak topics + recommended next.
+   * Dashboard aggregates: score trend, weak topics, recommended next,
+   * study streak (IST), checklist, recent docs/chats, platform papers.
    */
   dashboard: protectedProcedure.query(async ({ ctx }) => {
+    const userId = ctx.userId;
+    const user = await ctx.db.user.findUnique({
+      where: { id: userId },
+      include: { exam: true },
+    });
+
     const reports = await ctx.db.report.findMany({
-      where: { userId: ctx.userId, status: "READY" },
+      where: { userId, status: "READY" },
       orderBy: { createdAt: "asc" },
       take: 30,
       select: {
@@ -116,7 +124,6 @@ export const reportsRouter = createTRPCRouter({
       at: r.attempt.submittedAt ?? r.createdAt,
     }));
 
-    // Merge latest topic verdicts (prefer most recent report)
     const weakMap = new Map<string, string>();
     for (const r of [...reports].reverse()) {
       const topics = r.topicAnalysis as
@@ -136,16 +143,135 @@ export const reportsRouter = createTRPCRouter({
       | null;
     const recommendedNext = recs?.items?.[0] ?? null;
 
+    // Activity for streak
+    const [messages, docs, attempts] = await Promise.all([
+      ctx.db.message.findMany({
+        where: { chat: { userId }, role: "USER" },
+        select: { createdAt: true },
+        take: 500,
+        orderBy: { createdAt: "desc" },
+      }),
+      ctx.db.document.findMany({
+        where: { userId, deletedAt: null },
+        select: { createdAt: true },
+        take: 200,
+        orderBy: { createdAt: "desc" },
+      }),
+      ctx.db.attempt.findMany({
+        where: { userId, submittedAt: { not: null } },
+        select: { submittedAt: true },
+        take: 200,
+        orderBy: { submittedAt: "desc" },
+      }),
+    ]);
+
+    const activity: Date[] = [
+      ...messages.map((m) => m.createdAt),
+      ...docs.map((d) => d.createdAt),
+      ...attempts
+        .map((a) => a.submittedAt)
+        .filter((d): d is Date => d != null),
+    ];
+    const studyStreak = computeStudyStreak(activity);
+
+    const docCount = await ctx.db.document.count({
+      where: { userId, deletedAt: null, kind: { not: "SYLLABUS" } },
+    });
+    const chatCount = await ctx.db.chat.count({
+      where: { userId, deletedAt: null },
+    });
+    const attemptCount = await ctx.db.attempt.count({
+      where: { userId, status: { not: "IN_PROGRESS" } },
+    });
+
+    const checklist = {
+      uploadNotes: docCount > 0,
+      askTutor: chatCount > 0,
+      takePaper: attemptCount > 0,
+    };
+    const isNewUser =
+      !checklist.uploadNotes && !checklist.askTutor && !checklist.takePaper;
+
+    const recentDocuments = await ctx.db.document.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        kind: true,
+        ingestStatus: true,
+        ingestProgress: true,
+        updatedAt: true,
+      },
+    });
+
+    const recentChats = await ctx.db.chat.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        updatedAt: true,
+      },
+    });
+
+    const examType = user?.exam?.type ?? null;
+    const platformPapers = examType
+      ? await ctx.db.test.findMany({
+          where: {
+            visibility: "PLATFORM",
+            deletedAt: null,
+            status: "READY",
+            publishedAt: { not: null },
+            examType,
+          },
+          orderBy: [{ paperYear: "desc" }, { title: "asc" }],
+          take: 5,
+          select: {
+            id: true,
+            title: true,
+            paperYear: true,
+            examType: true,
+            durationMin: true,
+            _count: { select: { questions: true } },
+          },
+        })
+      : [];
+
+    // Days to exam: May 1 of targetYear (NEET/JEE typical) or Jan 1
+    let daysToExam: number | null = null;
+    if (user?.exam?.targetYear) {
+      const y = user.exam.targetYear;
+      const examDate = new Date(Date.UTC(y, 4, 1)); // May 1
+      const now = new Date();
+      daysToExam = Math.ceil(
+        (examDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+      );
+    }
+
     return {
       scoreTrend,
       weakTopics: [...weakMap.keys()].slice(0, 10),
       recommendedNext,
       latestReportId: latest?.id ?? null,
       latestAttemptId: latest?.attemptId ?? null,
+      studyStreak,
+      checklist,
+      isNewUser,
+      recentDocuments,
+      recentChats,
+      platformPapers,
+      daysToExam,
+      examType,
+      targetYear: user?.exam?.targetYear ?? null,
+      targetScore: user?.exam?.targetScore ?? null,
+      firstName: user?.name?.split(/\s+/)[0] ?? null,
+      onboarded: user?.onboarded ?? false,
     };
   }),
 
-  /** Idempotent re-analysis (force) */
   reanalyze: protectedProcedure
     .input(z.object({ attemptId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
@@ -180,11 +306,9 @@ export const reportsRouter = createTRPCRouter({
         await ctx.emitEvent("attempt.submitted", {
           attemptId: attempt.id,
           userId: ctx.userId,
-          testId: attempt.testId,
           force: true,
         });
       }
-
-      return { ok: true as const, attemptId: attempt.id };
+      return { ok: true as const };
     }),
 });

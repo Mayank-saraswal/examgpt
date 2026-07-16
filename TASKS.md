@@ -477,6 +477,17 @@ Streaming chat: tRPC v11 supports streaming responses; if friction on RN, use a 
 - [x] `WEBSEARCH_BACKEND=perplexity|firecrawl` (default perplexity); firecrawl → search/scrape → synthesize with `explain` into cutoff schema with real URLs.
 - **Live-verify notes (2026-07-16):** Code complete; `bun run check` green (palette property tests included). Side-by-side visual vs `testwindow.jpeg` / `instructionoftest.jpeg` — confirm in browser with Clerk session. Firecrawl live HTML ingest needs `FIRECRAWL_API_KEY` in `.env`.
 
+### Phase 7.7 — Landing, onboarding wizard, dashboard revamp (added 2026-07-16)
+
+- [x] Public landing `/` (marketing for signed-out; signed-in → `/dashboard`): hero, 4 features, how-it-works, exam chips, FAQ accordion, footer.
+- [x] Legal: `/privacy`, `/terms` (DPDP-aware drafts, deleteAccount, AI processing). Public in Clerk proxy.
+- [x] SEO: metadataBase, OG image route, sitemap.ts, robots.ts. Theme toggle (light/dark).
+- [x] Mobile first-run welcome carousel (3 slides, skippable, SecureStore once).
+- [x] Onboarding multi-step wizard (web + mobile): profile → exam cards → targets; mobile + notifications step; `saveProgress` + `complete`; resumable via `User.onboardingStep`.
+- [x] Instant-wow dashboard: platform papers card when published catalog exists; else guided checklist from real counts.
+- [x] Dashboard revamp: greeting, exam badge, days-to-exam, streak (IST unit-tested), weak topics → chat, recommended next, recent docs with ingest pills, recent chats, quick actions.
+- **Live-verify (2026-07-16):** `bun run check` green (streak 7 tests). Browser Lighthouse 90+ on `next build` landing not re-run this session — re-verify with `bun run --filter @examgpt/web build && start` + Lighthouse. Wizard resume: abandon mid-step → login → same step. Dashboard empty-vs-platform card depends on published PLATFORM tests.
+
 ### Phase 8 — Deployment + release
 - [x] Server: Dockerfile (`apps/server/Dockerfile`) → **Railway** (`railway.toml`); docs for Neon Postgres, Qdrant Cloud, Inngest Cloud, R2 prod, prod Clerk (incl. admin role + session JWT public_metadata). See `docs/DEPLOYMENT.md`.
 - [x] Web: Vercel wiring documented; env list in deploy guide (custom domain TBD with credentials).

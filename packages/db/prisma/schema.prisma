@@ -47,6 +47,8 @@ model User {
   name       String?
   age        Int?
   onboarded  Boolean      @default(false)
+  /// Wizard step: profile | exam | targets | notifications | done
+  onboardingStep String   @default("profile")
   /// Cumulative pages counted toward INGEST_PAGE_QUOTA
   pagesUsed  Int          @default(0)
   createdAt  DateTime     @default(now())
@@ -68,6 +70,8 @@ model ExamProfile {
   type               ExamType
   customName         String?
   targetYear         Int?
+  /// Optional target score (marks) for countdown / coaching
+  targetScore        Int?
   syllabusDocumentId String?
   syllabusStatus     IngestStatus @default(PENDING)
   syllabusTopics     Json?
