@@ -32,6 +32,10 @@ function RootStack() {
         }}
       >
         <Stack.Screen name="index" options={{ title: "ExamGPT" }} />
+        <Stack.Screen
+          name="welcome"
+          options={{ title: "Welcome", headerShown: false }}
+        />
         <Stack.Screen name="sign-in" options={{ title: "Sign in" }} />
         <Stack.Screen name="onboarding" options={{ title: "Onboarding" }} />
         <Stack.Screen

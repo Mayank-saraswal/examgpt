@@ -8,6 +8,11 @@ const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/privacy(.*)",
+  "/terms(.*)",
+  "/sitemap.xml",
+  "/robots.txt",
+  "/og.png",
   // Prebuilt OAuth uses paths under /sign-in and /sign-up; keep legacy callback public if used
   "/sso-callback(.*)",
 ]);
