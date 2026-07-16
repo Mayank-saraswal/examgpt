@@ -36,20 +36,20 @@ RUN apt-get update \
     libpixman-1-0 \
   && rm -rf /var/lib/apt/lists/*
 
+# Bun hoists workspace deps to the root node_modules — do not COPY nested
+# apps/*/node_modules (they often do not exist and break Kaniko).
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
-COPY --from=deps /app/packages ./packages
-COPY package.json bun.lock bunfig.toml turbo.json tsconfig.base.json ./
+COPY --from=deps /app/package.json /app/bun.lock /app/bunfig.toml /app/turbo.json /app/tsconfig.base.json ./
 COPY apps/server ./apps/server
 COPY packages ./packages
 
 # Prisma client generate at build (schema must be present)
 WORKDIR /app/packages/db
-RUN bunx prisma generate
+RUN bun x prisma generate
 
 WORKDIR /app
 
 EXPOSE 4000
 
-# Run migrations then start (override CMD on Railway if migrate runs in release phase)
-CMD ["sh", "-c", "bunx prisma migrate deploy --schema packages/db/prisma/schema.prisma && bun apps/server/src/index.ts"]
+# Run migrations then start
+CMD ["sh", "-c", "bun x prisma migrate deploy --schema packages/db/prisma/schema.prisma && bun apps/server/src/index.ts"]
