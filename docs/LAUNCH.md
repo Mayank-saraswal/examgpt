@@ -34,15 +34,15 @@ Full credential detail lives in [`DEPLOYMENT.md`](./DEPLOYMENT.md). Update this 
 
 | # | Who | Item | Status |
 |---|-----|------|--------|
-| C1 | OWNER | **Neon** project in **AWS ap-southeast-1 (Singapore)** → `DATABASE_URL` (+ optional direct URL) | [ ] *STOP — agent needs this* |
-| C2 | OWNER | **Qdrant Cloud** cluster **Singapore** → `QDRANT_URL` + `QDRANT_API_KEY` | [ ] *STOP — agent needs this* |
-| C3 | OWNER | **Inngest Cloud** app → `INNGEST_EVENT_KEY` + `INNGEST_SIGNING_KEY` | [ ] *STOP — agent needs this* |
-| C4 | OWNER | **Cloudflare R2** prod bucket + S3 keys | [ ] |
-| C5 | AGENT | `bun run scripts/r2-diagnose.ts` → Put/Get/Head OK; **STOP if fail** | [ ] |
-| C6 | OWNER | AI keys: OpenAI / Google / OpenRouter (test deploy) | [ ] |
-| C7 | OWNER | Clerk **DEV** instance keys OK for test deploy; switch to prod Clerk at real launch | [ ] |
+| C1 | OWNER | **Neon** project in **AWS ap-southeast-1 (Singapore)** → `DATABASE_URL` (+ optional direct URL) | [x] project `examgpt` / `steep-pond-21853186`; migrations applied via Neon MCP |
+| C2 | OWNER | **Qdrant Cloud** cluster **Singapore** → `QDRANT_URL` + `QDRANT_API_KEY` | [~] **API key set; still need `QDRANT_URL` (cloud REST URL)** |
+| C3 | OWNER | **Inngest Cloud** app → `INNGEST_EVENT_KEY` + `INNGEST_SIGNING_KEY` | [~] **signing key set; still need `INNGEST_EVENT_KEY`** |
+| C4 | OWNER | **Cloudflare R2** prod bucket + S3 keys | [x] from local `.env` |
+| C5 | AGENT | `bun run scripts/r2-diagnose.ts` → Put/Get/Head OK; **STOP if fail** | [x] HeadBucket/Put/Get OK (ListBuckets 403 scoped token OK) |
+| C6 | OWNER | AI keys: OpenAI / Google / OpenRouter (test deploy) | [x] from local `.env` |
+| C7 | OWNER | Clerk **DEV** instance keys OK for test deploy; switch to prod Clerk at real launch | [x] using dev keys |
 | C8 | OWNER | DigitalOcean account + token for App Platform (MCP or dashboard) | [x] DO MCP connected |
-| C9 | AGENT | Deploy app in **blr** with `.do/app.yaml` once C1–C6 provided | [ ] |
+| C9 | AGENT | Deploy app in **blr** with `.do/app.yaml` once C1–C6 provided | [~] app `examgpt` id `c3e12a42-d912-4735-881b-84c524632a96` created; redeploy after Docker lockfile fix |
 
 ---
 
@@ -51,10 +51,10 @@ Full credential detail lives in [`DEPLOYMENT.md`](./DEPLOYMENT.md). Update this 
 | # | Who | Item | Status |
 |---|-----|------|--------|
 | D1 | AGENT | `.do/app.yaml` — server (Dockerfile) + web (Next.js), region blr | [x] |
-| D2 | AGENT | Env secrets per component (`STORAGE_BACKEND=r2`, CORS, API URLs, Clerk, AI, Qdrant, Neon, Inngest, ADMIN_USER_IDS, …) | [ ] |
-| D3 | AGENT | Create/update DO app via MCP; deploy; verify `GET /health` → `postgres:up` + `qdrant:up` | [ ] |
-| D4 | AGENT | Domains: web `examgpt.mayanksaraswal.in`, API `examgpt-api.mayanksaraswal.in` | [ ] |
-| D5 | OWNER | Add DNS **CNAME** records agent provides | [ ] *wait for confirmation* |
+| D2 | AGENT | Env secrets per component (`STORAGE_BACKEND=r2`, CORS, API URLs, Clerk, AI, Qdrant, Neon, Inngest, ADMIN_USER_IDS, …) | [x] set on DO (encrypted); QDRANT_URL placeholder until cloud URL provided |
+| D3 | AGENT | Create/update DO app via MCP; deploy; verify `GET /health` → `postgres:up` + `qdrant:up` | [~] first build failed frozen-lockfile; Dockerfile fix pushed `edd47d0`; awaiting green deploy |
+| D4 | AGENT | Domains: web `examgpt.mayanksaraswal.in`, API `examgpt-api.mayanksaraswal.in` | [x] attached on app (CNAME after ACTIVE) |
+| D5 | OWNER | Add DNS **CNAME** records agent provides | [ ] *wait for ACTIVE + exact targets* |
 | D6 | AGENT | `NEXT_PUBLIC_API_URL` / `CORS_ORIGINS` / Clerk allowed origins updated for domains | [ ] |
 | D7 | AGENT | Register Inngest serve URL → prod API `/api/inngest`; confirm functions sync | [ ] |
 
