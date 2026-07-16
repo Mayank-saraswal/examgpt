@@ -20,8 +20,8 @@ export default function AdminHomePage() {
     return <ErrorState title="Failed to load admin overview" />;
   }
 
-  const list = papers.data ?? [];
-  const published = list.filter((p) => p.publishedAt).length;
+  const list = Array.isArray(papers.data) ? papers.data : [];
+  const published = list.filter((p) => Boolean(p.publishedAt)).length;
   const extracting = list.filter(
     (p) => p.status === "EXTRACTING" || p.status === "NEEDS_REVIEW",
   ).length;
