@@ -52,9 +52,9 @@ Full credential detail lives in [`DEPLOYMENT.md`](./DEPLOYMENT.md). Update this 
 |---|-----|------|--------|
 | D1 | AGENT | `.do/app.yaml` — server (Dockerfile) + web (Next.js), region blr | [x] |
 | D2 | AGENT | Env secrets per component (`STORAGE_BACKEND=r2`, CORS, API URLs, Clerk, AI, Qdrant, Neon, Inngest, ADMIN_USER_IDS, …) | [x] set on DO (encrypted); QDRANT_URL placeholder until cloud URL provided |
-| D3 | AGENT | Create/update DO app via MCP; deploy; verify `GET /health` → `postgres:up` + `qdrant:up` | [~] first build failed frozen-lockfile; Dockerfile fix pushed `edd47d0`; awaiting green deploy |
-| D4 | AGENT | Domains: web `examgpt.mayanksaraswal.in`, API `examgpt-api.mayanksaraswal.in` | [x] attached on app (CNAME after ACTIVE) |
-| D5 | OWNER | Add DNS **CNAME** records agent provides | [ ] *wait for ACTIVE + exact targets* |
+| D3 | AGENT | Create/update DO app via MCP; deploy; verify `GET /health` → `postgres:up` + `qdrant:up` | [~] app **ACTIVE** (commit `b465969`); health recheck after DNS; Qdrant URL still placeholder |
+| D4 | AGENT | Domains: web `examgpt.mayanksaraswal.in`, API `examgpt-api.mayanksaraswal.in` | [x] attached on app |
+| D5 | AGENT | Cloudflare DNS CNAMEs → `examgpt-8b6ge.ondigitalocean.app` (DNS-only / not proxied) | [x] set via Cloudflare MCP 2026-07-16 |
 | D6 | AGENT | `NEXT_PUBLIC_API_URL` / `CORS_ORIGINS` / Clerk allowed origins updated for domains | [ ] |
 | D7 | AGENT | Register Inngest serve URL → prod API `/api/inngest`; confirm functions sync | [ ] |
 
