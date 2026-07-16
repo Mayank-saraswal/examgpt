@@ -5,7 +5,10 @@ FROM oven/bun:1.3-debian AS deps
 WORKDIR /app
 
 COPY package.json bun.lock bunfig.toml turbo.json tsconfig.base.json ./
+# All workspace package.json files required for frozen lockfile install
 COPY apps/server/package.json ./apps/server/
+COPY apps/web/package.json ./apps/web/
+COPY apps/mobile/package.json ./apps/mobile/
 COPY packages/api/package.json ./packages/api/
 COPY packages/ai/package.json ./packages/ai/
 COPY packages/db/package.json ./packages/db/
