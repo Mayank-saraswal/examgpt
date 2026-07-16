@@ -97,7 +97,7 @@ services:
     http_port: 3000
     instance_count: 1
     instance_size_slug: basic-xxs
-    build_command: bun install && bun run --filter @examgpt/web build
+    build_command: bun install && bunx prisma generate --schema packages/db/prisma/schema.prisma && bun run --filter @examgpt/web build
     run_command: bun run --filter @examgpt/web start
     routes:
       - path: /

@@ -183,15 +183,30 @@ export default function AdminPapersPage() {
         <h2 className="mb-2 font-medium">Platform papers</h2>
         {list.isLoading && <LoadingState label="Loading papers…" />}
         {list.isError && <ErrorState title="Failed to load papers" />}
-        {list.data && list.data.length === 0 && (
-          <EmptyState
-            title="No platform papers"
-            description="Upload a previous-year PDF to start the extract pipeline."
-          />
-        )}
-        {list.data && list.data.length > 0 && (
+        {(() => {
+          const rows = Array.isArray(list.data)
+            ? (list.data as Array<{
+                id: string;
+                title: string;
+                examType: string | null;
+                paperYear: number | null;
+                status: string;
+                publishedAt: Date | string | null;
+                _count: { questions: number };
+              }>)
+            : [];
+          if (list.isLoading || list.isError) return null;
+          if (rows.length === 0) {
+            return (
+              <EmptyState
+                title="No platform papers"
+                description="Upload a previous-year PDF to start the extract pipeline."
+              />
+            );
+          }
+          return (
           <ul className="divide-y divide-[var(--eg-border)] rounded-xl border border-[var(--eg-border)]">
-            {list.data.map((p) => (
+            {rows.map((p) => (
               <li
                 key={p.id}
                 className="flex flex-wrap items-center justify-between gap-2 px-4 py-3"
@@ -239,7 +254,8 @@ export default function AdminPapersPage() {
               </li>
             ))}
           </ul>
-        )}
+          );
+        })()}
       </section>
     </div>
   );

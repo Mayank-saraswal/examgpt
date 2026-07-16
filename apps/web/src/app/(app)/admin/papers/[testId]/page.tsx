@@ -71,12 +71,25 @@ export default function AdminPaperReviewPage() {
   });
 
   if (paper.isLoading) return <LoadingState label="Loading paper…" />;
-  if (paper.isError || !paper.data) {
+  if (paper.isError || !paper.data || typeof paper.data !== "object") {
     return <ErrorState title="Platform paper not found" />;
   }
 
-  const t = paper.data;
-  const questions = (t.questions ?? []) as Q[];
+  // Explicit shape — avoids DO CI collapsing deep Prisma/tRPC inference to never
+  const t = paper.data as {
+    id: string;
+    title: string;
+    status: string;
+    examType: string;
+    paperYear: number | null;
+    totalMarks: number;
+    durationMin: number;
+    failureReason: string | null;
+    publishedAt: Date | string | null;
+    questions?: Q[];
+    _count?: { questions: number };
+  };
+  const questions: Q[] = Array.isArray(t.questions) ? t.questions : [];
 
   async function saveFlags() {
     const flags = questions.map((q) => ({
